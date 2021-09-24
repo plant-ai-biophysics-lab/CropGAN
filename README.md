@@ -11,13 +11,18 @@ We provide the pytorch implementation of a semantically constrained GAN to gener
 
 ### Source domain data  
 The dataset used in this research:
-1. Synthetic data
+1. Synthetic Grape Data
 
 ### Target domain data
 The dataset used in this research:
-1. Borden Night image (realsense, 2020):
-/data2/zfei/data/cycleGAN/yolo/paper_dataset/BordenNight
+1. Night Grape
+2. Day Grape
 
+## **Generate Semantic Consistent GAN Fruits**
+Use the following script to load the pre-trained Semantic Consistent GAN model and generate target domain images from source synthetic image.
+```bash
+
+```
 
 
 
