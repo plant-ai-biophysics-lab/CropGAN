@@ -28,6 +28,7 @@ import util.util as utils
 from models.sem_cycle_gan_model import SemCycleGANModel
 from util.dataset_yolo import ListDataset
 
+
 # Setup options
 opt = TrainOptions().parse()   # get training options
 print(opt)

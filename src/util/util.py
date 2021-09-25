@@ -135,7 +135,7 @@ def parse_loss_log(loss_file):
                 header = []
                 losses = []
                 for text in loss_split:
-                    if (text is not '') and (text is not '\n'):
+                    if (text != '') and (text != '\n'):
                         if '_' in text:
                             header.append(text.replace(":", ''))
                         else:
