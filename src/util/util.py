@@ -163,6 +163,16 @@ def plot_loss(loss_file, plot_headers=None, moving_average_window=None):
     plt.legend()
 
 
+def preprocess_images(image, resize=[256, 256]):
+    image_np = image.resize(resize)
+    image_np = np.asarray(image_np)
+    image_np = image_np.astype(np.float32)
+    image_np_normalized = np.expand_dims(image_np, 0)
+    image_np_normalized = (image_np_normalized/256)/0.5 - 0.5 # Normalize
+    image_tensor = torch.from_numpy(image_np_normalized)
+    image_tensor = image_tensor.permute([0, 3, 1, 2])
+    return image_tensor, image_np
+
 def plot_image_with_detections(img_tensor,
                                detections_bbox=None,
                                groun_truth_bbox=None,
