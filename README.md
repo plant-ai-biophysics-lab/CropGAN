@@ -2,7 +2,7 @@
 
 We provide the pytorch implementation of a semantically constrained GAN to generate artificial realisitc fruit images for training to reduce the need of real image labeling in fruit detection.
 
-**[Paper Link](https://arxiv.org/abs/2108.13344)**
+**[Paper Link](https://openaccess.thecvf.com/content/ICCV2021W/CVPPA/papers/Fei_Enlisting_3D_Crop_Models_and_GANs_for_More_Data_Efficient_ICCVW_2021_paper.pdf)**
 
 <img src='imgs/fig-image-transfer-demo.png'>
 
