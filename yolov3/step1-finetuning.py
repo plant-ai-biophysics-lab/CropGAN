@@ -55,13 +55,19 @@ if __name__ == "__main__":
 
 
     # Get data configuration
+    print("data config: ", opt.data_config)
     data_config = parse_data_config(opt.data_config)
-    train_path = data_config["train"]
-    valid_path = data_config["valid"]
-    class_names = load_classes(data_config["names"])
+    data_folder = data_config["data_folder"]
+    meta_folder = data_config["data_folder"] + "/" + data_config["config"] + "/"
+    train_path = meta_folder + data_config["train"]
+    valid_path = meta_folder + data_config["valid"]
+    class_names = load_classes(meta_folder + data_config["names"])
     print("class_names: ", class_names)
-    print("data_config[names]: ", data_config["names"])
+    print("data_config[names]: ", meta_folder + data_config["names"])
     print("valid path: ", valid_path)
+    print("pretrained_weights: ", opt.pretrained_weights)
+    print("data_folder: ", data_folder)
+
     time.sleep(2)
 
     # Initiate model
@@ -77,7 +83,7 @@ if __name__ == "__main__":
             model.load_darknet_weights(opt.pretrained_weights)
 
     # Get dataloader
-    dataset = ListDataset(train_path, augment=True, multiscale=opt.multiscale_training)
+    dataset = ListDataset(train_path, data_folder=data_folder, augment=True, multiscale=opt.multiscale_training)
     dataloader = torch.utils.data.DataLoader(
         dataset,
         batch_size=opt.batch_size,
@@ -165,6 +171,7 @@ if __name__ == "__main__":
             # Evaluate the model on the validation set
             precision, recall, AP, f1, ap_class = evaluate(
                 model,
+                data_folder=data_folder,
                 path=valid_path,
                 iou_thres=0.5,
                 conf_thres=0.5,

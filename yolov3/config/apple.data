@@ -1,4 +1,0 @@
-classes= 1
-train=/mnt/data/CMUApple/coco_style_dataset/train.txt
-valid=/mnt/data/CMUApple/coco_style_dataset/valid.txt
-names=/mnt/data/CMUApple/coco_style_dataset/apples.names

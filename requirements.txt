@@ -5,3 +5,5 @@ visdom>=0.1.8.8
 opencv-python
 argparse
 albumentations
+tensorflow==2.7.0
+terminaltables
