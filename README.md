@@ -76,6 +76,8 @@ python -u step1-finetuning.py --model_def ./config/yolov3-tiny.cfg \
                            --epochs=100
 ```
 
+## Funding
+This project was partly funded by the [National AI Institute for Food Systems (AIFS)](https://aifs.ucdavis.edu).
 
 
 
