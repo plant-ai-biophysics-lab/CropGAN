@@ -1,5 +1,5 @@
 """
-Dual step trainning of the sementic constrained cycle GAN.
+trainning the sementic constrained cycle GAN (Crop GAN ).
 Step 1: Initialize a YOLO model from real A.
     Step 2: Train a yolo constrained generator A (for several epoch). [A better generator!]
     Step 3: Generate fake B image dataset using G_A (label same as A).

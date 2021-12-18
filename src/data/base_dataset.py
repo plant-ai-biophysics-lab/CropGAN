@@ -83,7 +83,7 @@ def get_transform(opt, params=None, img_size=[512, 512], grayscale=False, method
     if 'aug' in opt.preprocess:
         # DIY augmentation process
         transform_list = []
-        transform_list.append(aug.transforms.RandomResizedCrop(height=opt.crop_size, width=opt.crop_size, 
+        transform_list.append(aug.augmentations.crops.transforms.RandomResizedCrop(height=opt.crop_size, width=opt.crop_size, 
                                             scale=(0.2, 1.0), 
                                             interpolation=1, 
                                             always_apply=False,

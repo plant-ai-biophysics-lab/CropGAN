@@ -4,6 +4,7 @@ dominate>=2.4.0
 visdom>=0.1.8.8
 opencv-python
 argparse
-albumentations
+albumentations==1.1.0
 tensorflow==2.7.0
 terminaltables
+visdom
