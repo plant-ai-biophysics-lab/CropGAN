@@ -80,7 +80,6 @@ python -u step1-finetuning.py --model_def ./config/yolov3-tiny.cfg \
 1. Run train_cropgan.py at src/
 ```bash
 """
-Make sure lambda_yolo_a = 0 for not using labeled b in the data folder
 yolo_b_weights can be selected from the weight you trained in STEP1
 """
 dataroot="$your_folder/CropGANData/crop_gan_data/sytheticVis2bordenNight/"
