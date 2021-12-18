@@ -119,6 +119,8 @@ pytorch-CycleGAN-and-pix2pix
 2. The YOLOv3 implementation is from *Erik Linder-Norén*  
 https://github.com/eriklindernoren/PyTorch-YOLOv3  
 A minimal PyTorch implementation of YOLOv3, with support for training, inference and evaluation.
+## Funding
+This project was partly funded by the [National AI Institute for Food Systems (AIFS)](https://aifs.ucdavis.edu).
 
 
 
