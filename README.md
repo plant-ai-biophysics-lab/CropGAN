@@ -48,7 +48,7 @@ detection_datasets
     └── valid
 ```
 ## **3. Train the model**
-#### STEP1 Finetuning using N train image and K validation image
+#### STEP 1: Finetuning using N train images and K validation images
 1. Run step1-finetuning.py script at yolov3 folder  
 ```bash
 """
@@ -75,7 +75,7 @@ python -u step1-finetuning.py --model_def ./config/yolov3-tiny.cfg \
                            --checkpoint_interval 10\
                            --epochs=100
 ```
-#### STEP2 Train Semantic Constrained Cycle GAM
+#### STEP2 Train Semantically Constrained CycleGAN
 
 1. Run train_cropgan.py at src/
 ```bash
@@ -118,6 +118,7 @@ pytorch-CycleGAN-and-pix2pix
 2. The YOLOv3 implementation is from *Erik Linder-Norén*  
 https://github.com/eriklindernoren/PyTorch-YOLOv3  
 A minimal PyTorch implementation of YOLOv3, with support for training, inference and evaluation.
+
 ## Funding
 This project was partly funded by the [National AI Institute for Food Systems (AIFS)](https://aifs.ucdavis.edu).
 
