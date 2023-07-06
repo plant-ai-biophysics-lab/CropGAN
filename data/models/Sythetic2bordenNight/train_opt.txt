@@ -3,7 +3,7 @@
                     beta1: 0.5                           
           checkpoints_dir: ../data/models/               	[default: ./checkpoints]
            continue_train: False                         
-                crop_size: 256                           
+                crop_size: 416                           	[default: 256]
           cycle_gan_epoch: 10                            
                  dataroot: None                          
              dataset_mode: unaligned                     
@@ -20,7 +20,7 @@
                eval_model: None                          
     fake_dataset_save_dir:                               
                  gan_mode: lsgan                         
-                  gpu_ids: -1                            	[default: 0]
+                  gpu_ids: 0                             
                 init_gain: 0.02                          
                 init_type: normal                        
                  input_nc: 3                             
@@ -31,7 +31,7 @@
             lambda_yolo_a: 0.0                           
             lambda_yolo_b: 0.0                           
                 load_iter: 0                             	[default: 0]
-                load_size: 256                           	[default: 286]
+                load_size: 416                           	[default: 286]
                        lr: 0.0002                        
            lr_decay_iters: 50                            
                 lr_policy: linear                        
