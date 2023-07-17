@@ -38,7 +38,7 @@ def get_valid_box(boxes):
     boxes = boxes.astype(dtype=np.float32)
     return boxes
 
-class YoloTaskReverseDataset(BaseDataset):
+class DetectorTaskReverseDataset(BaseDataset):
     """
     This dataset also load oneshot file and label to provide constrain in G(A)
 
@@ -136,7 +136,7 @@ class YoloTaskReverseDataset(BaseDataset):
             else:
                 A_targets = np.asarray([])
 
-            A_img_yolo = A
+            A_img_detector = A
             A_targets = A_targets.astype(dtype=np.float32)
             A_targets = torch.from_numpy(A_targets)
             # print("A_targets.dtype: ", A_targets.shape)
@@ -189,16 +189,16 @@ class YoloTaskReverseDataset(BaseDataset):
             labeled_B = self.transform_labeled_B(labeled_B_img)
 
             # --------------------------------
-            # YOLO Task
+            # detector Task
             # --------------------------------
-            # Preproess for YOLO input images
+            # Preproess for detector input images
             # Make a copy of the img
-            A_img_yolo = A.detach().clone()
-            _, h, w = A_img_yolo.shape
+            A_img_detector = A.detach().clone()
+            _, h, w = A_img_detector.shape
             h_factor, w_factor = (h, w)
             # Pad to square resolution
-            A_img_yolo, pad = pad_to_square(A_img_yolo, 0)
-            _, padded_h, padded_w = A_img_yolo.shape
+            A_img_detector, pad = pad_to_square(A_img_detector, 0)
+            _, padded_h, padded_w = A_img_detector.shape
 
             # Label for A
             A_label_path = A_path.replace("train", "label").replace(".png", ".txt").replace(".jpg", ".txt")
@@ -231,10 +231,10 @@ class YoloTaskReverseDataset(BaseDataset):
                 labeled_B_targets = torch.zeros((len(boxes), 6))
                 labeled_B_targets[:, 1:] = boxes
 
-        A_img_yolo = resize(A_img_yolo, self.opt.yolo_img_size)  
+        A_img_detector = resize(A_img_detector, self.opt.detector_img_size)  
 
         return {'A': A, 'B': B, 'A_paths': A_path, 'B_paths': B_path, 
-                'A_label': A_targets, 'A_task': A_img_yolo, 
+                'A_label': A_targets, 'A_task': A_img_detector, 
                 'labeled_B': labeled_B, 'labeled_B_label': labeled_B_targets}
 
     def collate_fn(self, batch_batch):
