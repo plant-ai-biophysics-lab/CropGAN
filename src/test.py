@@ -22,7 +22,7 @@ from options.train_options import TrainOptions
 from options.test_options import TestOptions
 from data import create_dataset
 from models import create_model
-import util.util_yolo as util_yolo
+import util.util_detector as util_detector
 from models.yolo_model import Darknet
 import util.util as utils
 from models.sem_cycle_gan_model import SemCycleGANModel

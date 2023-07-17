@@ -333,6 +333,7 @@ def build_targets(pred_boxes, pred_cls, target, anchors, ignore_thres):
     noobj_mask = noobj_mask.bool()
     return iou_scores, class_mask, obj_mask, noobj_mask, tx, ty, tw, th, tcls, tconf
 
+# Needed for evaluate_detector_net
 def evaluate(model, path, iou_thres, conf_thres, nms_thres, img_size, batch_size):
     model.eval()
 
@@ -410,13 +411,13 @@ def evaluate_yolo(model, yolo_valid_path, iou_thres, conf_thres, nms_thres, img_
     model.set_requires_grad([model.netYolo], True)  
     return precision, recall, AP, f1, ap_class, fruit_count_predict
 
-
-def evaluate_yolo_net(netYolo, yolo_valid_path, iou_thres, conf_thres, nms_thres, img_size, class_names):
+# Updated for general detector.
+def evaluate_detector_net(netDetector, detector_valid_path, iou_thres, conf_thres, nms_thres, img_size, class_names):
     print("Compute mAP on real data...")
-    netYolo.eval()
+    netDetector.eval()
     precision, recall, AP, f1, ap_class, fruit_count_predict = evaluate(
-                                                            netYolo,
-                                                            path=yolo_valid_path,
+                                                            netDetector,
+                                                            path=detector_valid_path,
                                                             iou_thres= iou_thres,
                                                             conf_thres= conf_thres,
                                                             nms_thres= nms_thres,
@@ -432,10 +433,10 @@ def evaluate_yolo_net(netYolo, yolo_valid_path, iou_thres, conf_thres, nms_thres
     print(f"mAP: {AP.mean()}")
 
     print("precision %.2f, recall %.2f, AP %.2f, f1 %.2f, " %(precision, recall, AP, f1))
-    netYolo.train()
+    netDetector.train()
     return precision, recall, AP, f1, ap_class, fruit_count_predict
 
-
+#TODO: update for general detector
 def evaluate_yolo_through_fakeA(model, dataset, iou_thres, conf_thres, nms_thres):
     """"[summary]"
     dataset e.g. :valid_path = "/mnt/inter_data_ssd/domain_adapt/yolo/bordenDaySquare/images/"
@@ -493,7 +494,7 @@ def evaluate_yolo_through_fakeA(model, dataset, iou_thres, conf_thres, nms_thres
     return precision, recall, AP, f1
 
 
-
+#TODO: update for general detector
 def evaluate_yolo_through_realB(model, dataset, iou_thres, conf_thres, nms_thres):
     """"[summary]"
     dataset e.g. :valid_path = "/mnt/inter_data_ssd/domain_adapt/yolo/bordenDaySquare/images/"
@@ -552,7 +553,7 @@ def evaluate_yolo_through_realB(model, dataset, iou_thres, conf_thres, nms_thres
     fruit_count_predict = np.asarray(fruit_count_predict)
     return precision, recall, AP, f1
 
-
+#TODO: update for general detector
 def evaluate_yolo_through_realB_double(model, dataset, iou_thres, conf_thres, nms_thres):
     """"[summary]"
     dataset e.g. :valid_path = "/mnt/inter_data_ssd/domain_adapt/yolo/bordenDaySquare/images/"

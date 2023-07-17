@@ -38,7 +38,7 @@ class BaseOptions():
         parser.add_argument('--init_gain', type=float, default=0.02, help='scaling factor for normal, xavier and orthogonal.')
         parser.add_argument('--no_dropout', action='store_true', help='no dropout for the generator')
         # dataset parameters
-        parser.add_argument('--dataset_mode', type=str, default='unaligned', help='chooses how datasets are loaded. [unaligned | aligned | single | colorization| yolo_task]')
+        parser.add_argument('--dataset_mode', type=str, default='unaligned', help='chooses how datasets are loaded. [unaligned | aligned | single | colorization| detector_task]')
         parser.add_argument('--direction', type=str, default='AtoB', help='AtoB or BtoA')
         parser.add_argument('--serial_batches', action='store_true', help='if true, takes images in order to make batches, otherwise takes them randomly')
         parser.add_argument('--num_threads', default=4, type=int, help='# threads for loading data')
@@ -57,14 +57,14 @@ class BaseOptions():
         # Zhenghao parameters
         parser.add_argument('--random_view', type=float, default=0, help='random zoom from min crop size up to random_view, set to >=1 to enable, will disbale loadsize resize ')
         parser.add_argument('--eval_model', required=False, help='direct path to checkpoint of model be used')
-        parser.add_argument('--yolo_evaluate_folder', type=str, default='None', help='the path to evaluate image file (label is the same pattern name) ')
-        parser.add_argument('--yolo_a_weights', type=str, default='', help='the location of trained yolo a network weights')
-        parser.add_argument('--yolo_b_weights', type=str, default='', help='the location of trained yolo b network weights')
-        parser.add_argument('--task_model_def', type=str, default='./config/yolov3.cfg', help='the location of trained yolo network definition')
-        parser.add_argument('--yolo_img_size', type=int, default=416, help='the size of yolo net input')
-        parser.add_argument('--yolo_valid_path', type=str, default='None', help='the location of trained yolo network definition')
-        parser.add_argument('--yolo_batch_size', type=int, default=4, help='the batch size of yolo net train')
-        parser.add_argument("--yolo_n_cpu", type=int, default=8, help="number of cpu threads to use during batch generation")
+        parser.add_argument('--detector_evaluate_folder', type=str, default='None', help='the path to evaluate image file (label is the same pattern name) ')
+        parser.add_argument('--detector_a_weights', type=str, default='', help='the location of trained detector a network weights')
+        parser.add_argument('--detector_b_weights', type=str, default='', help='the location of trained detector b network weights')
+        parser.add_argument('--task_model_def', type=str, default='./config/yolov3.cfg', help='the location of trained detector network definition')
+        parser.add_argument('--detector_img_size', type=int, default=416, help='the size of detector net input')
+        parser.add_argument('--detector_valid_path', type=str, default='None', help='the location of trained detector network definition')
+        parser.add_argument('--detector_batch_size', type=int, default=4, help='the batch size of detector net train')
+        parser.add_argument("--detector_n_cpu", type=int, default=8, help="number of cpu threads to use during batch generation")
 
 
         self.initialized = True

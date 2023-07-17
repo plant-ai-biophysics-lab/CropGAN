@@ -19,7 +19,7 @@ from torchvision import transforms
 from torch.autograd import Variable
 import torch.optim as optim
 
-def adapt_batchnorm(model,data_folder, path, img_size, batch_size):
+def adapt_batchnorm(model, data_folder, path, img_size, batch_size):
     model.eval()
 
     # Set running_mean and running_var to requires_grad=True

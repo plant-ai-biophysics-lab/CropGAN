@@ -72,7 +72,7 @@ class CustomDatasetDataLoader():
         dataset_class = find_dataset_using_name(opt.dataset_mode)
         self.dataset = dataset_class(opt)
         print("dataset [%s] was created" % type(self.dataset).__name__)
-        if opt.dataset_mode == "yolo_task" or "yolo_task_reverse" or "yolo_evaluate_dataset" or "yolo_finetune":
+        if opt.dataset_mode == "detector_task" or "detector_task_reverse" or "detector_evaluate_dataset" or "detector_finetune":
             self.dataloader = torch.utils.data.DataLoader(
                 self.dataset,
                 batch_size=opt.batch_size,

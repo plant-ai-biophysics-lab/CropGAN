@@ -7,7 +7,7 @@ import os
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import cv2 as cv
-import util.util_yolo as util_yolo
+import util.util_detector as util_detector
 import time
 import tqdm
 
@@ -269,7 +269,7 @@ def plot_analysis(model, data, figsize=[12, 12],
         # de-normalize the image before feed into the yolo net
         loss_yolo_b, bbox_outputs = model.netYolo(
             model.real_A*0.5+0.5, model.A_label)
-        detections_nms = util_yolo.non_max_suppression(
+        detections_nms = util_detector.non_max_suppression(
             bbox_outputs, conf_thres=conf_thres, nms_thres=nms_thres)
         plot_image_with_detections(
             model.real_A, detections_nms,  model.A_label,  ax=ax_grids[0][0])
@@ -278,7 +278,7 @@ def plot_analysis(model, data, figsize=[12, 12],
         # de-normalize the image before feed into the yolo net
         loss_yolo_b, bbox_outputs = model.netYolo(
             model.fake_B*0.5+0.5, model.A_label)
-        detections_nms = util_yolo.non_max_suppression(
+        detections_nms = util_detector.non_max_suppression(
             bbox_outputs, conf_thres=conf_thres, nms_thres=nms_thres)
         plot_image_with_detections(
             model.fake_B, detections_nms,  model.A_label, ax=ax_grids[0][1])
@@ -287,7 +287,7 @@ def plot_analysis(model, data, figsize=[12, 12],
         # de-normalize the image before feed into the yolo net
         loss_yolo_b, bbox_outputs = model.netYolo(
             model.real_B*0.5+0.5, model.A_label)
-        detections_nms = util_yolo.non_max_suppression(
+        detections_nms = util_detector.non_max_suppression(
             bbox_outputs, conf_thres=conf_thres, nms_thres=nms_thres)
         plot_image_with_detections(model.real_B, detections_nms,  ax=ax_grids[1][0])
 
@@ -295,7 +295,7 @@ def plot_analysis(model, data, figsize=[12, 12],
         # de-normalize the image before feed into the yolo net
         loss_yolo_b, bbox_outputs = model.netYolo(
             model.fake_A*0.5+0.5, model.A_label)
-        detections_nms = util_yolo.non_max_suppression(
+        detections_nms = util_detector.non_max_suppression(
             bbox_outputs, conf_thres=conf_thres, nms_thres=nms_thres)
         plot_image_with_detections(model.fake_A, detections_nms,  ax=ax_grids[1][1])
     else:
@@ -312,14 +312,14 @@ def plot_analysis(model, data, figsize=[12, 12],
             # de-normalize the image before feed into the yolo net
             loss_yolo_b, bbox_outputs = model.netYolo(
                 model.labeled_B*0.5+0.5, model.labeled_B_label)
-            detections_nms = util_yolo.non_max_suppression(
+            detections_nms = util_detector.non_max_suppression(
                 bbox_outputs, conf_thres=conf_thres, nms_thres=nms_thres)
             plot_image_with_detections(model.labeled_B, detections_nms,  model.labeled_B_label, ax=ax_grids[0][2])
             # fake_labeled_A
             # de-normalize the image before feed into the yolo net
             loss_yolo_b, bbox_outputs = model.netYolo(
                 model.fake_labeled_A*0.5+0.5, model.labeled_B_label)
-            detections_nms = util_yolo.non_max_suppression(
+            detections_nms = util_detector.non_max_suppression(
                 bbox_outputs, conf_thres=conf_thres, nms_thres=nms_thres)
             plot_image_with_detections(model.fake_labeled_A, detections_nms,  model.labeled_B_label, ax=ax_grids[1][2])
         else:
@@ -361,36 +361,36 @@ def plot_analysis_double_task(model, data, figsize=[12, 12],
 
     if plot_detections:
         # Real A
-        # de-normalize the image before feed into the yolo net
-        loss_yolo_b, bbox_outputs = model.netYoloA(
+        # de-normalize the image before feed into the detector net
+        loss_detector_b, bbox_outputs = model.netDetectorA(
             model.real_A*0.5+0.5, model.A_label)
-        detections_nms = util_yolo.non_max_suppression(
+        detections_nms = util_detector.non_max_suppression(
             bbox_outputs, conf_thres=conf_thres, nms_thres=nms_thres)
         plot_image_with_detections(
             model.real_A, detections_nms,  model.A_label,  ax=ax_grids[0][0])
 
         # Fake B
-        # de-normalize the image before feed into the yolo net
-        loss_yolo_b, bbox_outputs = model.netYoloB(
+        # de-normalize the image before feed into the detector net
+        loss_detector_b, bbox_outputs = model.netDetectorB(
             model.fake_B*0.5+0.5, model.A_label)
-        detections_nms = util_yolo.non_max_suppression(
+        detections_nms = util_detector.non_max_suppression(
             bbox_outputs, conf_thres=conf_thres, nms_thres=nms_thres)
         plot_image_with_detections(
             model.fake_B, detections_nms,  model.A_label, ax=ax_grids[0][1])
 
         # Real B
-        # de-normalize the image before feed into the yolo net
-        loss_yolo_b, bbox_outputs = model.netYoloB(
+        # de-normalize the image before feed into the detector net
+        loss_detector_b, bbox_outputs = model.netDetectorB(
             model.real_B*0.5+0.5, model.A_label)
-        detections_nms = util_yolo.non_max_suppression(
+        detections_nms = util_detector.non_max_suppression(
             bbox_outputs, conf_thres=conf_thres, nms_thres=nms_thres)
         plot_image_with_detections(model.real_B, detections_nms,  ax=ax_grids[1][0])
 
         # Fake A
-        # de-normalize the image before feed into the yolo net
-        loss_yolo_b, bbox_outputs = model.netYoloA(
+        # de-normalize the image before feed into the detector net
+        loss_detector_b, bbox_outputs = model.netDetectorA(
             model.fake_A*0.5+0.5, model.A_label)
-        detections_nms = util_yolo.non_max_suppression(
+        detections_nms = util_detector.non_max_suppression(
             bbox_outputs, conf_thres=conf_thres, nms_thres=nms_thres)
         plot_image_with_detections(model.fake_A, detections_nms,  ax=ax_grids[1][1])
     else:
@@ -404,17 +404,17 @@ def plot_analysis_double_task(model, data, figsize=[12, 12],
         ax_grids[1][2].set_title("Fake Labeled A")
         if plot_detections:
             # labeled_B
-            # de-normalize the image before feed into the yolo net
-            loss_yolo_b, bbox_outputs = model.netYoloB(
+            # de-normalize the image before feed into the detector net
+            loss_detector_b, bbox_outputs = model.netDetectorB(
                 model.labeled_B*0.5+0.5, model.labeled_B_label)
-            detections_nms = util_yolo.non_max_suppression(
+            detections_nms = util_detector.non_max_suppression(
                 bbox_outputs, conf_thres=conf_thres, nms_thres=nms_thres)
             plot_image_with_detections(model.labeled_B, detections_nms,  model.labeled_B_label, ax=ax_grids[0][2])
             # fake_labeled_A
-            # de-normalize the image before feed into the yolo net
-            loss_yolo_b, bbox_outputs = model.netYoloA(
+            # de-normalize the image before feed into the detector net
+            loss_detector_b, bbox_outputs = model.netDetectorA(
                 model.fake_labeled_A*0.5+0.5, model.labeled_B_label)
-            detections_nms = util_yolo.non_max_suppression(
+            detections_nms = util_detector.non_max_suppression(
                 bbox_outputs, conf_thres=conf_thres, nms_thres=nms_thres)
             plot_image_with_detections(model.fake_labeled_A, detections_nms,  model.labeled_B_label, ax=ax_grids[1][2])
         else:
@@ -457,14 +457,14 @@ def further_train_yolo_a(model, dataset, yolo_epochs, yolo_gradient_accumulation
             if evaluate_through_fake_A is not None:
                 if batches_done % evaluate_through_fake_A == 0:
                     precision, recall, AP, f1 = \
-                    util_yolo.evaluate_yolo_through_fakeA(model, dataset_yolo_eval, iou_thres, conf_thres, nms_thres)
+                    util_detector.evaluate_yolo_through_fakeA(model, dataset_yolo_eval, iou_thres, conf_thres, nms_thres)
                     print("evaluate_through_fake_A: precision %.2f, recall %.2f, AP %.2f, f1 %.2f"%(precision, recall, AP, f1))
                     evaluate_through_fake_A_results.append([batches_done, precision[0], recall[0], AP[0], f1[0]])
 
             if evaluate_through_real_B is not None:
                 if batches_done % evaluate_through_real_B == 0:
                     precision, recall, AP, f1 = \
-                    util_yolo.evaluate_yolo_through_realB(model, dataset_yolo_eval, iou_thres, conf_thres, nms_thres)
+                    util_detector.evaluate_yolo_through_realB(model, dataset_yolo_eval, iou_thres, conf_thres, nms_thres)
                     print("evaluate_through_real_B: precision %.2f, recall %.2f, AP %.2f, f1 %.2f"%(precision, recall, AP, f1))
                     evaluate_through_real_B_results.append([batches_done, precision[0], recall[0], AP[0], f1[0]])
 
@@ -564,13 +564,13 @@ def further_train_yolo_a_eval_double(model, dataset, yolo_epochs, yolo_gradient_
             if evaluate_through_real_B is not None and dataset_yolo_eval is not None:
                 if batches_done % evaluate_through_real_B == 0:
                     precision, recall, AP, f1 = \
-                    util_yolo.evaluate_yolo_through_realB_double(model, dataset_yolo_eval, iou_thres, conf_thres, nms_thres)
+                    util_detector.evaluate_yolo_through_realB_double(model, dataset_yolo_eval, iou_thres, conf_thres, nms_thres)
                     print("evaluate_through_real_B: precision %.2f, recall %.2f, AP %.2f, f1 %.2f"%(precision, recall, AP, f1))
                     evaluate_through_real_B_results.append([batches_done, precision[0], recall[0], AP[0], f1[0]])
 
             if evaluate_through_real_B is not None and validation_path is not None:
                 if batches_done % evaluate_through_real_B == 0:
-                    precision, recall, AP, f1, _, _ = util_yolo.evaluate_yolo_net(model.netYoloB, 
+                    precision, recall, AP, f1, _, _ = util_detector.evaluate_yolo_net(model.netYoloB, 
                                                                                 validation_path, 
                                                                                 iou_thres,
                                                                                 conf_thres, 

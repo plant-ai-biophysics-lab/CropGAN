@@ -35,10 +35,10 @@ class TrainOptions(BaseOptions):
         parser.add_argument('--lr_policy', type=str, default='linear', help='learning rate policy. [linear | step | plateau | cosine]')
         parser.add_argument('--lr_decay_iters', type=int, default=50, help='multiply by a gamma every lr_decay_iters iterations')
         # dual step parameters
-        parser.add_argument('--cycle_gan_epoch', type=int, default=10, help='number of epochs train cycle gan before train yolo')
-        parser.add_argument('--yolo_epochs', type=int, default=1, help='number yolo epochs')
-        parser.add_argument('--yolo_eval_on_real_period', type=int, default=500, help='eval yolo every n epochs')
-        parser.add_argument('--yolo_one_shot_file', type=str, default='None', help='the path to a single shot train file (label is the same pattern name) ')
+        parser.add_argument('--cycle_gan_epoch', type=int, default=10, help='number of detector train cycle gan before train detector')
+        parser.add_argument('--detector_epochs', type=int, default=1, help='number detector epochs')
+        parser.add_argument('--detector_eval_on_real_period', type=int, default=500, help='eval detector every n epochs')
+        parser.add_argument('--detector_one_shot_file', type=str, default='None', help='the path to a single shot train file (label is the same pattern name) ')
         # # Sem cycle GAN added
         parser.add_argument('--fake_dataset_save_dir', type=str, default='', help='saves generated images here.')
         parser.add_argument('--validation_path', type=str, default='', help='validation image path')

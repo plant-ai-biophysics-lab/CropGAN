@@ -97,7 +97,10 @@ class YoloTaskReverseDataset(BaseDataset):
             index_labeled_B = index % self.labeled_B_size
         else:   # randomize the index for domain B to avoid fixed pairs.
             index_B = random.randint(0, self.B_size - 1)
-            index_labeled_B = random.randint(0, self.labeled_B_size - 1)
+            if self.labeled_B_size > 0:
+                index_labeled_B = random.randint(0, self.labeled_B_size - 1)
+            else:
+                index_labeled_B = 0
 
         B_path = self.B_paths[index_B]
         labeled_B_path = self.labeled_B_paths[index_labeled_B]

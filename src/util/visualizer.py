@@ -80,7 +80,7 @@ class Visualizer():
             util.mkdirs([self.web_dir, self.img_dir])
         # create a logging file to store training losses
         self.log_name = os.path.join(opt.checkpoints_dir, opt.name, 'loss_log.txt')
-        self.log_name_yolo = os.path.join(opt.checkpoints_dir, opt.name, 'mAP_log_yolo.txt')
+        self.log_name_detector = os.path.join(opt.checkpoints_dir, opt.name, 'mAP_log_detector.txt')
 
         with open(self.log_name, "a") as log_file:
             now = time.strftime("%c")
@@ -222,15 +222,15 @@ class Visualizer():
         with open(self.log_name, "a") as log_file:
             log_file.write('%s\n' % message)  # save the message
 
-    def print_yolo_metric(self, epoch, iters, precision, recall, AP, f1):
-        """print current yolo metrics on console; also save the losses to the disk
+    def print_detector_metric(self, epoch, iters, precision, recall, AP, f1):
+        """print current detector metrics on console; also save the losses to the disk
 
         Parameters:
             epoch (int) -- current epoch
             iters (int) -- current training iteration during this epoch (reset to 0 at the end of every epoch)
             losses (OrderedDict) -- training losses stored in the format of (name, float) pairs
         """
-        message = '(yolo_epoch: %d, iters: %d, precision: %.3f, recall: %.3f, AP: %.3f, f1: %.3f) ' % (epoch, iters, precision, recall, AP, f1)
+        message = '(detector_epoch: %d, iters: %d, precision: %.3f, recall: %.3f, AP: %.3f, f1: %.3f) ' % (epoch, iters, precision, recall, AP, f1)
         print(message)  # print the message
-        with open(self.log_name_yolo, "a") as log_file:
+        with open(self.log_name_detector, "a") as log_file:
             log_file.write('%s\n' % message)  # save the message

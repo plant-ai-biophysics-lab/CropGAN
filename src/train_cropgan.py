@@ -1,9 +1,9 @@
 """
 trainning the sementic constrained cycle GAN (Crop GAN ).
-Step 1: Initialize a YOLO model from real A.
-    Step 2: Train a yolo constrained generator A (for several epoch). [A better generator!]
+Step 1: Initialize a detector model from real A.
+    Step 2: Train a detector-constrained generator A (for several epoch). [A better generator!]
     Step 3: Generate fake B image dataset using G_A (label same as A).
-    Step 4: Further train YOLO model using the data generate in step 3. [A better YOLO!]
+    Step 4: Further train detector model using the data generate in step 3. [A better detector!]
     Return to step 2
 """
 import time
@@ -12,66 +12,56 @@ from options.train_options import TrainOptions
 from data import create_dataset
 from models import create_model
 from util.visualizer import Visualizer
-from util.dataset_yolo import ListDataset
 from util.util import save_image_tensor
 from util.util import plot_analysis_double_task
-
-import glob
-import torch
-import copy
-import datetime
-from terminaltables import AsciiTable
-import util.util_yolo as util_yolo
-import tqdm
-import shutil
-from torch.autograd import Variable
+import  util.util_detector as util_detector
 
 
-def log_yolo(model):
-    # ----------------
-    #   Log progress
-    # ----------------
-    metrics = [
-        "grid_size",
-        "loss",
-        "x",
-        "y",
-        "w",
-        "h",
-        "conf",
-        "cls",
-        "cls_acc",
-        "recall50",
-        "recall75",
-        "precision",
-        "conf_obj",
-        "conf_noobj",
-    ]
-    log_str = "\n--------\n" 
+# def log_yolo(model):
+#     # ----------------
+#     #   Log progress
+#     # ----------------
+#     metrics = [
+#         "grid_size",
+#         "loss",
+#         "x",
+#         "y",
+#         "w",
+#         "h",
+#         "conf",
+#         "cls",
+#         "cls_acc",
+#         "recall50",
+#         "recall75",
+#         "precision",
+#         "conf_obj",
+#         "conf_noobj",
+#     ]
+#     log_str = "\n--------\n" 
+#     # TODO update for yolo
+#     metric_table = [["Metrics", *[f"YOLO Layer {i}" for i in range(len(model.netYolo.yolo_layers))]]]
 
-    metric_table = [["Metrics", *[f"YOLO Layer {i}" for i in range(len(model.netYolo.yolo_layers))]]]
+#     # Log metrics at each YOLO layer
+#     for i, metric in enumerate(metrics):
+#         formats = {m: "%.6f" for m in metrics}
+#         formats["grid_size"] = "%2d"
+#         formats["cls_acc"] = "%.2f%%"
+#         row_metrics = [formats[metric] % yolo.metrics.get(metric, 0) for yolo in model.netYolo.yolo_layers]
+#         metric_table += [[metric, *row_metrics]]
 
-    # Log metrics at each YOLO layer
-    for i, metric in enumerate(metrics):
-        formats = {m: "%.6f" for m in metrics}
-        formats["grid_size"] = "%2d"
-        formats["cls_acc"] = "%.2f%%"
-        row_metrics = [formats[metric] % yolo.metrics.get(metric, 0) for yolo in model.netYolo.yolo_layers]
-        metric_table += [[metric, *row_metrics]]
+#         # Tensorboard logging
+#         tensorboard_log = []
+#         for j, yolo in enumerate(model.netYolo.yolo_layers):
+#             for name, metric in yolo.metrics.items():
+#                 if name != "grid_size":
+#                     tensorboard_log += [(f"{name}_{j+1}", metric)]
+#         tensorboard_log += [("loss", loss.item())]
+#         # logger.list_of_scalars_summary(tensorboard_log, batches_done)
 
-        # Tensorboard logging
-        tensorboard_log = []
-        for j, yolo in enumerate(model.netYolo.yolo_layers):
-            for name, metric in yolo.metrics.items():
-                if name != "grid_size":
-                    tensorboard_log += [(f"{name}_{j+1}", metric)]
-        tensorboard_log += [("loss", loss.item())]
-        # logger.list_of_scalars_summary(tensorboard_log, batches_done)
+#     log_str += AsciiTable(metric_table).table
+#     log_str += f"\nTotal loss {loss.item()}"
 
-    log_str += AsciiTable(metric_table).table
-    log_str += f"\nTotal loss {loss.item()}"
-
-    print(log_str)
+#     print(log_str)
 
 
 # def save_intermediate_images(opt, intermediate_yolo_folder, save_real_A=False, save_one_shot=True):
@@ -122,7 +112,6 @@ def log_yolo(model):
 
 if __name__ == '__main__':
     # TODO: Args to be added into option
-    yolo_gradient_accumulations = 2
     iou_thres=0.5
     conf_thres=0.5
     nms_thres = 0.5
@@ -141,17 +130,18 @@ if __name__ == '__main__':
     model.setup(opt)               # regular setup: load and print networks; create schedulers
     visualizer = Visualizer(opt)   # create a visualizer that display/save images and plots
     total_iters = 0                # the total number of training iterations
-    yolo_save_dir = os.path.join(opt.checkpoints_dir, opt.name)  # save all the checkpoints to save_dir
-    intermediate_yolo_folder = os.path.join(opt.checkpoints_dir, opt.name) + "/intermediate/" # the folder to save intermediate yolo training data
+    # detector_save_dir = os.path.join(opt.checkpoints_dir, opt.name)  # save all the checkpoints to save_dir
+    # intermediate_detector_folder = os.path.join(opt.checkpoints_dir, opt.name) + "/intermediate/" # the folder to save intermediate detector training data
     plot_save_dir = os.path.join(opt.checkpoints_dir, opt.name) + "/plots/" 
     if not os.path.exists(plot_save_dir):
         os.makedirs(plot_save_dir)
 
-    model.save_yolo_networks("init")
-    # save_intermediate_images(opt, intermediate_yolo_folder, save_real_A=True)
+    model.save_detector_networks("init")
+    # save_intermediate_images(opt, intermediate_detector_folder, save_real_A=True)
 
     # dual step cycle gan related variables
-    # util_yolo.evaluate_yolo_net(model.netYoloB, opt.yolo_valid_path, iou_thres, conf_thres, nms_thres, img_size, class_names)
+    # TODO: Do we want this uncommented?
+    # util_detector.evaluate_detector_net(model.netDetectorB, opt.detector_valid_path, iou_thres, conf_thres, nms_thres, img_size, class_names)
 
     for epoch in range(opt.epoch_count, opt.n_epochs + opt.n_epochs_decay + 1):    # outer loop for different epochs; we save the model by <epoch_count>, <epoch_count>+<save_latest_freq>
         epoch_start_time = time.time()  # timer for entire epoch
