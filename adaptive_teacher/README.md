@@ -4,7 +4,8 @@ The original CropGAN work **[Paper Link](https://openaccess.thecvf.com/content/I
 
 This repo begins with that work, and stacks architecture-based DA on top of it. Architecture-based DA would include any changes to the model (loss function, adversarial training, gradient reversals) to facillitate model generalization from the training (source) domain to the test (target) domain.  Here, we will be using a recent DA technique: Adaptive Teacher.
 
-Adaptive Teacher: **[Github Link](https://github.com/facebookresearch/adaptive_teacherhttps://github.com/facebookresearch/adaptive_teacher)**  
+Adaptive Teacher:  
+**[Github Link](https://github.com/facebookresearch/adaptive_teacherhttps://github.com/facebookresearch/adaptive_teacher)**  
 **[Paper Link](https://openaccess.thecvf.com/content/CVPR2022/papers/Li_Cross-Domain_Adaptive_Teacher_for_Object_Detection_CVPR_2022_paper.pdf)**
 
 ## Prerequisites
