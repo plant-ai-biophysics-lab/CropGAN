@@ -22,17 +22,28 @@ Unfortunately, adaptive_teacher does not have a setup.py, requirements.txt, etc.
 `git clone https://github.com/facebookresearch/adaptive_teacher.git` fot HTTPS or
 `git clone git@github.com:facebookresearch/adaptive_teacher.git` for SSH.
 
-Then update this line in `train_net_cropgan.py`:
+Then add these lines to `train_net_cropgan.py` or any training .py file:
 ```
+import sys
 sys.path.append("/path/to/adaptive_teacher")
 ```
 
 ## **2. Training Adaptive Teacher Model**
-[Michael to add this]
+### **i. Prepare Data**
+
+Adaptive Teacher expects data in either COCO or VOC formats. To add new datasets to the adaptive teacher training, use `register_coco_instance` function, for example
+```register_coco_instances("helios_raw_synthetic", {}, "path/to/annotations/_annotations.coco.json", "path/to/data/train/")```
+where `helios_raw_synthetic` is the dataset name to be used in config.  
+
+### **ii. Config**
+
+Adaptive Teacher uses Detectron2's [YACS Config system](https://detectron2.readthedocs.io/en/latest/tutorials/configs.html) which allows configs to inherit from each other with `_BASE_`. An example config for our CropGAN experiments is `faster_rcnn_VGG_CROPGAN_borden_night.yaml`.
+
+### **iii. Train**
+Once the dataset is registered and config is written, training can be run by calling `train_net_cropgan.py` from the command line. An example:
+```python train_net_cropgan.py --num-gpus 1 --config-file configs/faster_rcnn_VGG_CROPGAN_borden_night.yaml ```
 
 ## **2. Using Adaptive Teacher Model**
-[Michael to add this]
+To run evaluation, make sure that the config file has a path at `MODEL.WEIGHTS` to the model weights, and pass the `--eval-only` flag when calling `train_net_cropgan.py`:
+```python train_net_cropgan.py --eval-only --num-gpus 1 --config-file configs/faster_rcnn_VGG_CROPGAN_borden_night.yaml ```
 
-## **3. Prepare Data**
-
-Adaptive Teacher expects data in either COCO or VOC formats. [Add detail here]
