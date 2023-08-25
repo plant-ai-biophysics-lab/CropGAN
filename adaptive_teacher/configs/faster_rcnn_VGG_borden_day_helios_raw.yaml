@@ -1,0 +1,55 @@
+# Based on faster_rcnn_VGG_cross_city.yaml
+_BASE_: "./Base-RCNN-C4.yaml"
+MODEL:
+  # WEIGHTS: "/home/michael/ucdavis/adaptive_teacher/output/helios-plus-cropgan-n-1/model_0014999.pth"
+  # META_ARCHITECTURE: "TwoStagePseudoLabGeneralizedRCNN"
+  META_ARCHITECTURE: "DAobjTwoStagePseudoLabGeneralizedRCNN"
+  BACKBONE:
+    NAME: "build_vgg_backbone"
+  MASK_ON: False
+  RESNETS:
+    DEPTH: 101
+  PROPOSAL_GENERATOR:
+    NAME: "PseudoLabRPN"
+  # RPN:
+  #   POSITIVE_FRACTION: 0.25
+  RPN:
+    IN_FEATURES: ["vgg4"]
+  ROI_HEADS:
+    NAME: "CropGanStandardROIHeadsPseudoLab"
+    LOSS: "CrossEntropy" # variant: "CrossEntropy"
+    NUM_CLASSES: 1
+    IN_FEATURES: ["vgg4"]
+  ROI_BOX_HEAD:
+    NAME: "FastRCNNConvFCHead"
+    NUM_FC: 2
+    POOLER_RESOLUTION: 7
+SOLVER:
+  LR_SCHEDULER_NAME: "WarmupTwoStageMultiStepLR"
+  STEPS: (20000, 30000, 40000, 45000)
+  FACTOR_LIST: (1, 0.3, 0.1, .03, .01)
+  CHECKPOINT_PERIOD: 500
+  MAX_ITER: 50000
+  IMG_PER_BATCH_LABEL: 1
+  IMG_PER_BATCH_UNLABEL: 1
+  BASE_LR: 0.01
+DATALOADER:
+  SUP_PERCENT: 100.0
+DATASETS:
+DATASETS:
+  CROSS_DATASET: True
+  TRAIN_LABEL: ("helios_raw_synthetic",)
+  TRAIN_UNLABEL: ("real_borden_day_train",)
+  TEST: ("real_borden_day_test",)
+OUTPUT_DIR: ./output/borden_day_raw_helios_082523
+SEMISUPNET:
+  Trainer: "ateacher"
+  BBOX_THRESHOLD: 0.8
+  TEACHER_UPDATE_ITER: 1
+  BURN_UP_STEP: 10000 # SHOULD BE 8000
+  EMA_KEEP_RATE: 0.9996
+  UNSUP_LOSS_WEIGHT: 1.0
+  SUP_LOSS_WEIGHT: 1.0
+  DIS_TYPE: "vgg4" #["concate","p2","multi"]
+TEST:
+  EVAL_PERIOD: 500
