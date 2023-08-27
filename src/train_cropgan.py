@@ -42,7 +42,8 @@ if __name__ == '__main__':
     if not os.path.exists(plot_save_dir):
         os.makedirs(plot_save_dir)
 
-    model.save_detector_networks("init")
+    # MHS: Not saving since we aren't updating the weights
+    # model.save_detector_networks("init")
 
     # dual step cycle gan related variables
     # TODO: Do we want this uncommented?

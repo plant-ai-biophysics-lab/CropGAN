@@ -18,12 +18,9 @@ from detectron2.data.datasets import register_coco_instances
 from adapteacher import add_ateacher_config
 from adapteacher.engine.trainer import ATeacherTrainer, BaselineTrainer
 
-# hacky way to register
-from adapteacher.modeling.meta_arch.rcnn import TwoStagePseudoLabGeneralizedRCNN, DAobjTwoStagePseudoLabGeneralizedRCNN
-from adapteacher.modeling.meta_arch.vgg import build_vgg_backbone  # noqa
-from adapteacher.modeling.proposal_generator.rpn import PseudoLabRPN
-from cropgan_adapteacher.modeling.roi_heads.roi_heads import CropGanStandardROIHeadsPseudoLab
-import adapteacher.data.datasets.builtin
+# import adapteacher.data.datasets.builtin
+from cropgan_adapteacher.util.cfg_setup import setup
+
 
 from adapteacher.modeling.meta_arch.ts_ensemble import EnsembleTSModel
 
@@ -84,19 +81,6 @@ def plot_classes_preds(net, images, labels):
             classes[labels[idx]]),
                     color=("green" if preds[idx]==labels[idx].item() else "red"))
     return fig
-
-
-def setup(args):
-    """
-    Create configs and perform basic setups.
-    """
-    cfg = get_cfg()
-    add_ateacher_config(cfg)
-    cfg.merge_from_file(args.config_file)
-    cfg.merge_from_list(args.opts)
-    cfg.freeze()
-    default_setup(cfg, args)
-    return cfg
 
 
 def main(args):

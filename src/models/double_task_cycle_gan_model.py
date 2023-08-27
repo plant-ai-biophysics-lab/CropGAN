@@ -1,10 +1,22 @@
+import sys
+sys.path.append("/home/michael/ucdavis/adaptive_teacher")
+sys.path.append("/home/michael/ucdavis/CropGAN/adaptive_teacher")
+
 import torch
 import itertools
 from util.image_pool import ImagePool
 from .base_model import BaseModel
 from . import networks
 from models.yolo_model import Darknet
+import argparse
 import os
+
+from detectron2.modeling.meta_arch.build import build_model
+
+from adapteacher.engine.trainer import ATeacherTrainer
+from adapteacher.modeling.meta_arch.ts_ensemble import EnsembleTSModel
+from cropgan_adapteacher.util.cfg_setup import setup as cfg_setup
+
 
 class DoubleTaskCycleGanModel(BaseModel):
     """
@@ -94,33 +106,16 @@ class DoubleTaskCycleGanModel(BaseModel):
         print("\nInitializing detector network ... ")
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print("Detector Device: ", device)
+        """
         #TODO: Can't use Darknet for all detectors
         self.netDetectorA = Darknet(opt.task_model_def, img_size=opt.detector_img_size).to(device)
         self.netDetectorB = Darknet(opt.task_model_def, img_size=opt.detector_img_size).to(device)
-
-        # load detector A weights
-        if opt.detector_a_weights != '':
-            if opt.detector_a_weights.endswith(".weights"):
-                # Load darknet weights
-                self.netDetectorA.load_darknet_weights(opt.detector_a_weights)
-            else:
-                # Load checkpoint weights
-                self.netDetectorA.load_state_dict(torch.load(opt.detector_a_weights))
-            print("Load detector a weights: ", opt.detector_a_weights)
-        else:
-            print("No detector a weights loaded ")
-
-        # load detector B weights
-        if opt.detector_b_weights != '':
-            if opt.detector_b_weights.endswith(".weights"):
-                # Load darknet weights
-                self.netDetectorB.load_darknet_weights(opt.detector_b_weights)
-            else:
-                # Load checkpoint weights
-                self.netDetectorB.load_state_dict(torch.load(opt.detector_b_weights))
-            print("Load detector b weights: ", opt.detector_b_weights)
-        else:
-            print("No detector b weights loaded ")
+        """
+       
+        # self.netDetectorA = self.build_darknet_model(opt=opt, model_weights = opt.detector_a_weights, device=device, detector_name="a")
+        # self.netDetectorB = self.build_darknet_model(opt=opt, model_weights = opt.detector_b_weights, device=device, detector_name="b")
+        self.netDetectorA = self.build_detectron2_model(opt=opt, model_weights = opt.detector_a_weights, device=device, detector_name="a")
+        self.netDetectorB = self.build_detectron2_model(opt=opt, model_weights = opt.detector_b_weights, device=device, detector_name="b")
         
         # Set in evaluation mode
         self.netDetectorA.eval()  
@@ -140,17 +135,65 @@ class DoubleTaskCycleGanModel(BaseModel):
             # initialize optimizers; schedulers will be automatically created by function <BaseModel.setup>.
             self.optimizer_G = torch.optim.Adam(itertools.chain(self.netG_A.parameters(), self.netG_B.parameters()), lr=opt.lr, betas=(opt.beta1, 0.999))
             self.optimizer_D = torch.optim.Adam(itertools.chain(self.netD_A.parameters(), self.netD_B.parameters()), lr=opt.lr, betas=(opt.beta1, 0.999))
-            self.optimizer_detector_a = torch.optim.Adam(self.netDetectorA.parameters(), lr=opt.lr)
-            self.optimizer_detector_b = torch.optim.Adam(self.netDetectorB.parameters(), lr=opt.lr)
+            # self.optimizer_detector_a = torch.optim.Adam(self.netDetectorA.parameters(), lr=opt.lr)
+            # self.optimizer_detector_b = torch.optim.Adam(self.netDetectorB.parameters(), lr=opt.lr)
 
             self.optimizers.append(self.optimizer_G)
             self.optimizers.append(self.optimizer_D)
-            self.optimizers.append(self.optimizer_detector_a)
-            self.optimizers.append(self.optimizer_detector_b)
+            # self.optimizers.append(self.optimizer_detector_a)
+            # self.optimizers.append(self.optimizer_detector_b)
 
 
             # double task
             self.refine_step = opt.refine_detector_b_step
+
+    def build_darknet_model(self, opt, model_weights: dict, device: str, detector_name: str):
+        model = Darknet(opt.task_model_def, img_size=opt.detector_img_size).to(device)
+
+        # load detector weights
+        if model_weights != '':
+            if model_weights.endswith(".weights"):
+                # Load darknet weights
+                model.load_darknet_weights(model_weights)
+            else:
+                # Load checkpoint weights
+                model.load_state_dict(torch.load(model_weights))
+            print(f"Load detector {detector_name} weights: ", model_weights)
+        else:
+            print(f"No detector {detector_name} weights loaded.")
+        
+        return model
+        
+    def build_detectron2_model(self, opt, model_weights: dict, device: str, detector_name: str):
+        class Args(argparse.Namespace):
+            config_file = opt.task_model_def
+            num_gpus = 1
+            machine_rank = 0
+            num_machines=1
+            dist_url='tcp://127.0.0.1:50152'
+            opts = []
+            resume = False
+            classes='grapes'
+
+        args=Args()
+        
+        cfg = cfg_setup(args)
+        model_teacher = build_model(cfg).to(device)
+        if "MODEL" in cfg:
+            if "WEIGHTS" in cfg["MODEL"]:
+                state_dict = torch.load(cfg['MODEL']['WEIGHTS'])
+                teacher_state_dict = {}
+
+                # weights are stored with modelTeacher prefix, need to remove it.
+                for key in state_dict['model']:
+                    if 'modelTeacher' in key:
+                        new_key = key[13:]
+                        teacher_state_dict[new_key] = state_dict['model'][key]
+                model_teacher.load_state_dict(teacher_state_dict)   
+                print(f"Load detector {detector_name} weights: ", model_weights)
+            else:
+                print(f"No detector {detector_name} weights loaded.")
+        return model_teacher     
 
     def set_input(self, input):
         """Unpack input data from the dataloader and perform necessary pre-processing steps.
@@ -182,21 +225,22 @@ class DoubleTaskCycleGanModel(BaseModel):
     def get_detector_output(self):
         return self.bbox_outputs
 
-    def save_detector_networks(self, prefix):
-        """Save the detector networks to the disk.
+    # MHS: Not in use
+    # def save_detector_networks(self, prefix):
+    #     """Save the detector networks to the disk.
 
-        Parameters:
-            prefix (string); used in the file name '%s_net_%s.pth' % (epoch, name)
-        """
-        save_filename = '%s_net_detector_a.pth' % prefix
-        save_path = os.path.join(self.save_dir, save_filename)
-        torch.save(self.netDetectorA.state_dict(), save_path)
-        print("Detector A Model saved at: ", save_path)
+    #     Parameters:
+    #         prefix (string); used in the file name '%s_net_%s.pth' % (epoch, name)
+    #     """
+    #     save_filename = '%s_net_detector_a.pth' % prefix
+    #     save_path = os.path.join(self.save_dir, save_filename)
+    #     torch.save(self.netDetectorA.state_dict(), save_path)
+    #     print("Detector A Model saved at: ", save_path)
 
-        save_filename = '%s_net_detector_b.pth' % prefix
-        save_path = os.path.join(self.save_dir, save_filename)
-        torch.save(self.netDetectorB.state_dict(), save_path)
-        print("Detector B Model saved at: ", save_path)
+    #     save_filename = '%s_net_detector_b.pth' % prefix
+    #     save_path = os.path.join(self.save_dir, save_filename)
+    #     torch.save(self.netDetectorB.state_dict(), save_path)
+    #     print("Detector B Model saved at: ", save_path)
 
     def forward(self):
         """Run forward pass; called by both functions <optimize_parameters> and <test>."""
@@ -222,13 +266,14 @@ class DoubleTaskCycleGanModel(BaseModel):
                 self.fake_A = self.netG_B(self.real_B)  # G_B(B)
         else:
             self.fake_A = self.netG_B(self.real_B)  # G_B(B)
-    
-    def load_network_detector_b(self, epoch):
-        load_filename = '%s_net_detector_b.pth' % epoch
-        load_path = os.path.join(self.save_dir, load_filename)
-        self.netDetectorB.load_state_dict(torch.load(load_path))
-        print("load detector weights: ", load_path)
-        self.netDetectorB.eval()  # Set in evaluation mode
+
+    # MHS: Not in use
+    # def load_network_detector_b(self, epoch):
+    #     load_filename = '%s_net_detector_b.pth' % epoch
+    #     load_path = os.path.join(self.save_dir, load_filename)
+    #     self.netDetectorB.load_state_dict(torch.load(load_path))
+    #     print("load detector weights: ", load_path)
+    #     self.netDetectorB.eval()  # Set in evaluation mode
 
 
     def backward_D_basic(self, netD, real, fake):
