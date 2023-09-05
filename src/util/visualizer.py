@@ -33,13 +33,14 @@ def save_images(webpage, visuals, image_path, aspect_ratio=1.0, width=256):
     ims, txts, links = [], [], []
 
     for label, im_data in visuals.items():
-        im = util.tensor2im(im_data)
-        image_name = '%s_%s.png' % (name, label)
-        save_path = os.path.join(image_dir, image_name)
-        util.save_image(im, save_path, aspect_ratio=aspect_ratio)
-        ims.append(image_name)
-        txts.append(label)
-        links.append(image_name)
+        if im_data is not None and im_data.shape[-1] != 0 :
+            im = util.tensor2im(im_data)
+            image_name = '%s_%s.png' % (name, label)
+            save_path = os.path.join(image_dir, image_name)
+            util.save_image(im, save_path, aspect_ratio=aspect_ratio)
+            ims.append(image_name)
+            txts.append(label)
+            links.append(image_name)
     webpage.add_images(ims, txts, links, width=width)
 
 
@@ -121,13 +122,14 @@ class Visualizer():
                 images = []
                 idx = 0
                 for label, image in visuals.items():
-                    image_numpy = util.tensor2im(image)
-                    label_html_row += '<td>%s</td>' % label
-                    images.append(image_numpy.transpose([2, 0, 1]))
-                    idx += 1
-                    if idx % ncols == 0:
-                        label_html += '<tr>%s</tr>' % label_html_row
-                        label_html_row = ''
+                    if image is not None and image.shape[-1] != 0 :
+                        image_numpy = util.tensor2im(image)
+                        label_html_row += '<td>%s</td>' % label
+                        images.append(image_numpy.transpose([2, 0, 1]))
+                        idx += 1
+                        if idx % ncols == 0:
+                            label_html += '<tr>%s</tr>' % label_html_row
+                            label_html_row = ''
                 white_image = np.ones_like(image_numpy.transpose([2, 0, 1])) * 255
                 while idx % ncols != 0:
                     images.append(white_image)
@@ -148,10 +150,11 @@ class Visualizer():
                 idx = 1
                 try:
                     for label, image in visuals.items():
-                        image_numpy = util.tensor2im(image)
-                        self.vis.image(image_numpy.transpose([2, 0, 1]), opts=dict(title=label),
-                                       win=self.display_id + idx)
-                        idx += 1
+                        if image is not None and image.shape[-1] != 0 :
+                            image_numpy = util.tensor2im(image)
+                            self.vis.image(image_numpy.transpose([2, 0, 1]), opts=dict(title=label),
+                                        win=self.display_id + idx)
+                            idx += 1
                 except VisdomExceptionBase:
                     self.create_visdom_connections()
 
@@ -159,9 +162,10 @@ class Visualizer():
             self.saved = True
             # save images to the disk
             for label, image in visuals.items():
-                image_numpy = util.tensor2im(image)
-                img_path = os.path.join(self.img_dir, 'epoch%.3d_%s.png' % (epoch, label))
-                util.save_image(image_numpy, img_path)
+                if image is not None and image.shape[-1] != 0 :
+                    image_numpy = util.tensor2im(image)
+                    img_path = os.path.join(self.img_dir, 'epoch%.3d_%s.png' % (epoch, label))
+                    util.save_image(image_numpy, img_path)
 
             # update website
             webpage = html.HTML(self.web_dir, 'Experiment name = %s' % self.name, refresh=1)
@@ -170,11 +174,12 @@ class Visualizer():
                 ims, txts, links = [], [], []
 
                 for label, image_numpy in visuals.items():
-                    image_numpy = util.tensor2im(image)
-                    img_path = 'epoch%.3d_%s.png' % (n, label)
-                    ims.append(img_path)
-                    txts.append(label)
-                    links.append(img_path)
+                    if image is not None and image.shape[-1] != 0 :
+                        image_numpy = util.tensor2im(image)
+                        img_path = 'epoch%.3d_%s.png' % (n, label)
+                        ims.append(img_path)
+                        txts.append(label)
+                        links.append(img_path)
                 webpage.add_images(ims, txts, links, width=self.win_size)
             webpage.save()
 

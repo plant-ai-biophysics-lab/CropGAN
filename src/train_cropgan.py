@@ -78,7 +78,8 @@ if __name__ == '__main__':
                     print("Visualizer finish")
 
                 save_path = plot_save_dir + "/epoch_%.3i_%.3i.jpg"%(epoch, total_iters)
-                plot_analysis_double_task(model, data, conf_thres=0.1, reverse=True, title="epoch_%.3i_%.3i.jpg"%(epoch, total_iters), save_name=save_path)
+                # TODO: add this back by returning 
+                # plot_analysis_double_task(model, data, conf_thres=0.1, reverse=True, title="epoch_%.3i_%.3i.jpg"%(epoch, total_iters), save_name=save_path)
                 # print('Display end')
 
             if total_iters % opt.print_freq == 0:    # print training losses and save logging information to the disk
