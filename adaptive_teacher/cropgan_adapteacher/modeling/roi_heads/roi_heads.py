@@ -17,7 +17,7 @@ from detectron2.modeling.roi_heads import (
 from detectron2.modeling.roi_heads.fast_rcnn import FastRCNNOutputLayers
 from detectron2.modeling.poolers import ROIPooler
 
-from cropgan_adapteacher.modeling.roi_heads.fast_rcnn import FastRCNNFocaltLossOutputLayers
+from cropgan_adapteacher.modeling.roi_heads.fast_rcnn import FastRCNNFocaltLossOutputLayers, CropGANFastRCNNOutputLayers
 
 
 @ROI_HEADS_REGISTRY.register()
@@ -50,7 +50,7 @@ class CropGanStandardROIHeadsPseudoLab(StandardROIHeads):
             ),
         )
         if cfg.MODEL.ROI_HEADS.LOSS == "CrossEntropy":
-            box_predictor = FastRCNNOutputLayers(cfg, box_head.output_shape)
+            box_predictor = CropGANFastRCNNOutputLayers(cfg, box_head.output_shape)
         elif cfg.MODEL.ROI_HEADS.LOSS == "FocalLoss":
             box_predictor = FastRCNNFocaltLossOutputLayers(cfg, box_head.output_shape)
         else:
