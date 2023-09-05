@@ -182,12 +182,12 @@ class CropGanStandardROIHeadsPseudoLab(StandardROIHeads):
             num_fg_samples.append(gt_classes.numel() - num_bg_samples[-1])
             proposals_with_gt.append(proposals_per_image)
 
-        storage = get_event_storage()
-        storage.put_scalar(
-            "roi_head/num_target_fg_samples_" + branch, np.mean(num_fg_samples)
-        )
-        storage.put_scalar(
-            "roi_head/num_target_bg_samples_" + branch, np.mean(num_bg_samples)
-        )
+        # storage = get_event_storage()
+        # storage.put_scalar(
+        #     "roi_head/num_target_fg_samples_" + branch, np.mean(num_fg_samples)
+        # )
+        # storage.put_scalar(
+        #     "roi_head/num_target_bg_samples_" + branch, np.mean(num_bg_samples)
+        # )
 
         return proposals_with_gt
