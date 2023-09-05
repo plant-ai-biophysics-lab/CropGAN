@@ -60,16 +60,16 @@ class DetectorTaskReverseDataset(BaseDataset):
         BaseDataset.__init__(self, opt)
         self.dir_A = os.path.join(opt.dataroot, 'trainA')  # create a path '/path/to/data/trainA'
         self.dir_B = os.path.join(opt.dataroot, 'trainB')  # create a path '/path/to/data/trainB'
-        self.dir_labeled_A = os.path.join(opt.dataroot, 'labeledB')  # create a path '/path/to/data/labeledB'
+        self.dir_labeled_B = os.path.join(opt.dataroot, 'labeledB')  # create a path '/path/to/data/labeledB'
 
 
         self.A_paths = sorted(make_dataset(self.dir_A, opt.max_dataset_size))   # load images from '/path/to/data/trainA'
         self.B_paths = sorted(make_dataset(self.dir_B, opt.max_dataset_size))    # load images from '/path/to/data/trainB'
-        self.labeled_B_paths = sorted(make_dataset(self.dir_labeled_A, opt.max_dataset_size))    # load images from '/path/to/data/labeledB'
+        self.labeled_B_paths = sorted(make_dataset(self.dir_labeled_B, opt.max_dataset_size))    # load images from '/path/to/data/labeledB'
 
         self.A_size = len(self.A_paths)  # get the size of dataset A
         self.B_size = len(self.B_paths)  # get the size of dataset B
-        self.labeled_B_size = len(self.labeled_B_paths)  # get the size of dataset B
+        self.labeled_B_size = len(self.labeled_B_paths)  # get the size of dataset labeledB
 
         btoA = self.opt.direction == 'BtoA'
         self.input_nc = self.opt.output_nc if btoA else self.opt.input_nc       # get the number of channels of input image
@@ -99,15 +99,20 @@ class DetectorTaskReverseDataset(BaseDataset):
             index_B = random.randint(0, self.B_size - 1)
             if self.labeled_B_size > 0:
                 index_labeled_B = random.randint(0, self.labeled_B_size - 1)
+                labeled_B_path = self.labeled_B_paths[index_labeled_B]
+                labeled_B_img = Image.open(labeled_B_path).convert('RGB')
             else:
-                index_labeled_B = 0
+                labeled_B_path = None
+                labeled_B_img = None
+                labeled_B = torch.Tensor()
+                labeled_B_targets = torch.Tensor()
 
         B_path = self.B_paths[index_B]
-        labeled_B_path = self.labeled_B_paths[index_labeled_B]
+        
 
         A_img = Image.open(A_path).convert('RGB')
         B_img = Image.open(B_path).convert('RGB')
-        labeled_B_img = Image.open(labeled_B_path).convert('RGB')
+        
 
         if 'aug' in self.opt.preprocess:
             self.transform_A, self.transform_B  = get_transform(self.opt, img_size=A_img.size, grayscale=(self.input_nc == 1))
@@ -117,7 +122,6 @@ class DetectorTaskReverseDataset(BaseDataset):
             boxes = np.loadtxt(A_label_path).reshape(-1, 5)
             boxes = get_valid_box(boxes)
             boxes = torch.from_numpy(boxes)
-            # print("boxes.dtype: ", boxes.dtype)
             A_img = np.asarray(A_img)
             class_labels = ['grapes' for i in range(len(boxes))]
 
@@ -148,33 +152,34 @@ class DetectorTaskReverseDataset(BaseDataset):
 
 
 
-            # Preprocess for labeled B
-            B_label_path = labeled_B_path.replace(".png", ".txt").replace(".jpg", ".txt")
-            boxes = np.loadtxt(B_label_path).reshape(-1, 5)
-            boxes = get_valid_box(boxes)
-            boxes = torch.from_numpy(boxes)
-            class_labels = ['grapes' for i in range(len(boxes))]
+            # Preprocess for labeled B - only if labeled B images are available
+            if labeled_B_path is not None:
+                B_label_path = labeled_B_path.replace(".png", ".txt").replace(".jpg", ".txt")
+                boxes = np.loadtxt(B_label_path).reshape(-1, 5)
+                boxes = get_valid_box(boxes)
+                boxes = torch.from_numpy(boxes)
+                class_labels = ['grapes' for i in range(len(boxes))]
 
-            # print("boxes.dtype: ", boxes.dtype)
+                # print("boxes.dtype: ", boxes.dtype)
 
-            labeled_B_img = np.asarray(labeled_B_img)
+                labeled_B_img = np.asarray(labeled_B_img)
 
-            try:
-                labeled_B_transformed = self.transform_A(image=labeled_B_img, bboxes=boxes[:, 1:], class_labels=class_labels)
-            except ValueError as e:
-                print("e: ", e)
-                print("boxes: ", A_label_path, boxes)
+                try:
+                    labeled_B_transformed = self.transform_A(image=labeled_B_img, bboxes=boxes[:, 1:], class_labels=class_labels)
+                except ValueError as e:
+                    print("e: ", e)
+                    print("boxes: ", A_label_path, boxes)
 
-            labeled_B = labeled_B_transformed["image"]
-            labeled_B_bboxes = labeled_B_transformed['bboxes']
+                labeled_B = labeled_B_transformed["image"]
+                labeled_B_bboxes = labeled_B_transformed['bboxes']
 
-            if len(labeled_B_bboxes) > 0:
-                labeled_B_targets = np.zeros((len(labeled_B_bboxes), 6))
-                labeled_B_targets[:, 2:] = np.asarray(labeled_B_bboxes)
-            else:
-                labeled_B_targets = np.asarray([])
-            labeled_B_targets = labeled_B_targets.astype(dtype=np.float32)
-            labeled_B_targets = torch.from_numpy(labeled_B_targets)
+                if len(labeled_B_bboxes) > 0:
+                    labeled_B_targets = np.zeros((len(labeled_B_bboxes), 6))
+                    labeled_B_targets[:, 2:] = np.asarray(labeled_B_bboxes)
+                else:
+                    labeled_B_targets = np.asarray([])
+                labeled_B_targets = labeled_B_targets.astype(dtype=np.float32)
+                labeled_B_targets = torch.from_numpy(labeled_B_targets)
 
 
         else:
@@ -186,7 +191,8 @@ class DetectorTaskReverseDataset(BaseDataset):
             # apply image transformation
             A = self.transform_A(A_img)
             B = self.transform_B(B_img)
-            labeled_B = self.transform_labeled_B(labeled_B_img)
+            if labeled_B_img is not None:
+                labeled_B = self.transform_labeled_B(labeled_B_img)
 
             # --------------------------------
             # detector Task
@@ -225,11 +231,12 @@ class DetectorTaskReverseDataset(BaseDataset):
                 A_targets[:, 1:] = boxes
 
             # Label for B
-            B_label_path = labeled_B_path.replace(".png", ".txt").replace(".jpg", ".txt")
-            if os.path.exists(B_label_path):
-                boxes = torch.from_numpy(np.loadtxt(B_label_path).reshape(-1, 5))
-                labeled_B_targets = torch.zeros((len(boxes), 6))
-                labeled_B_targets[:, 1:] = boxes
+            if labeled_B_path is not None:
+                B_label_path = labeled_B_path.replace(".png", ".txt").replace(".jpg", ".txt")
+                if os.path.exists(B_label_path):
+                    boxes = torch.from_numpy(np.loadtxt(B_label_path).reshape(-1, 5))
+                    labeled_B_targets = torch.zeros((len(boxes), 6))
+                    labeled_B_targets[:, 1:] = boxes
 
         A_img_detector = resize(A_img_detector, self.opt.detector_img_size)  
 
