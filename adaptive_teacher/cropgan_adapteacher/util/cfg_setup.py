@@ -11,6 +11,7 @@ from adapteacher.modeling.meta_arch.rcnn import TwoStagePseudoLabGeneralizedRCNN
 from adapteacher.modeling.meta_arch.vgg import build_vgg_backbone  # noqa
 from adapteacher.modeling.proposal_generator.rpn import PseudoLabRPN
 from cropgan_adapteacher.modeling.roi_heads.roi_heads import CropGanStandardROIHeadsPseudoLab
+from cropgan_adapteacher.modeling.meta_arch.rcnn import CropGANDAobjTwoStagePseudoLabGeneralizedRCNN
 
 def setup(args):
     """

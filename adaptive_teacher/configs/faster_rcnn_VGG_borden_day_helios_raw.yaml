@@ -3,7 +3,8 @@ _BASE_: "./Base-RCNN-C4.yaml"
 MODEL:
   # WEIGHTS: "/home/michael/ucdavis/adaptive_teacher/output/helios-plus-cropgan-n-1/model_0014999.pth"
   # META_ARCHITECTURE: "TwoStagePseudoLabGeneralizedRCNN"
-  META_ARCHITECTURE: "DAobjTwoStagePseudoLabGeneralizedRCNN"
+  # META_ARCHITECTURE: "DAobjTwoStagePseudoLabGeneralizedRCNN"
+  META_ARCHITECTURE: "CropGANDAobjTwoStagePseudoLabGeneralizedRCNN"
   BACKBONE:
     NAME: "build_vgg_backbone"
   MASK_ON: False
