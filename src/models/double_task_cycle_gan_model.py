@@ -322,7 +322,7 @@ class DoubleTaskCycleGanModel(BaseModel):
         lambda_detector_b = self.opt.lambda_detector_b
 
         if lambda_detector_b > 0:
-            image = self.fake_B[0,0,...]*0.5+0.5
+            image = self.fake_B[0,0,...]
             instances = self.create_detectron2_target_instance(image = image, labels = self.A_label)
             detector_input = [{"image":image, "instances":instances}]
             # loss_detector_b, self.bbox_outputs = self.netDetectorA(self.fake_B*0.5+0.5, self.A_label) # de-normalize the image before feed into the detector net
@@ -365,7 +365,7 @@ class DoubleTaskCycleGanModel(BaseModel):
 
         # Detector task loss
         if lambda_detector_b > 0:
-            image = self.fake_B[0,0,...]*0.5+0.5
+            image = self.fake_B[0,0,...]
             instances = self.create_detectron2_target_instance(image = image, labels = self.A_label)
             detector_input = [{"image":image, "instances":instances}]
             loss_dict, _, _, _ = self.netDetectorA(detector_input, val_mode=True) # Adaptive Teacher returns: dict, [], [], None
@@ -376,7 +376,7 @@ class DoubleTaskCycleGanModel(BaseModel):
             self.loss_detector_b = 0
 
         if lambda_detector_a > 0 and self.fake_labeled_A is not None:
-            image = self.fake_B[0,0,...]*0.5+0.5
+            image = self.fake_B[0,0,...]
             instances = self.create_detectron2_target_instance(image = image, labels = self.A_label)
             detector_input = [{"image":image, "instances":instances}]
             loss_dict, _, _, _ = self.netDetectorA(detector_input, val_mode=True) # Adaptive Teacher returns: dict, [], [], None
