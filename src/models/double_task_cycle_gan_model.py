@@ -116,11 +116,11 @@ class DoubleTaskCycleGanModel(BaseModel):
         # self.netDetectorA = self.build_darknet_model(opt=opt, model_weights = opt.detector_a_weights, device=device, detector_name="a")
         # self.netDetectorB = self.build_darknet_model(opt=opt, model_weights = opt.detector_b_weights, device=device, detector_name="b")
         self.netDetectorA = self.build_detectron2_model(opt=opt, model_weights = opt.detector_a_weights, device=device, detector_name="a")
-        self.netDetectorB = self.build_detectron2_model(opt=opt, model_weights = opt.detector_b_weights, device=device, detector_name="b")
+        # self.netDetectorB = self.build_detectron2_model(opt=opt, model_weights = opt.detector_b_weights, device=device, detector_name="b")
         
         # Set in evaluation mode
         self.netDetectorA.eval()  
-        self.netDetectorB.eval()  
+        # self.netDetectorB.eval()  
 
         if self.isTrain:
             if opt.lambda_identity > 0.0:  # only works when input and output images have the same number of channels

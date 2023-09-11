@@ -371,20 +371,21 @@ def plot_analysis_double_task(model, data, figsize=[12, 12],
 
         # Fake B
         # de-normalize the image before feed into the detector net
-        loss_detector_b, bbox_outputs = model.netDetectorB(
-            model.fake_B*0.5+0.5, model.A_label)
-        detections_nms = util_detector.non_max_suppression(
-            bbox_outputs, conf_thres=conf_thres, nms_thres=nms_thres)
-        plot_image_with_detections(
-            model.fake_B, detections_nms,  model.A_label, ax=ax_grids[0][1])
+        if hasattr(model,'netDetectorB'):
+            loss_detector_b, bbox_outputs = model.netDetectorB(
+                model.fake_B*0.5+0.5, model.A_label)
+            detections_nms = util_detector.non_max_suppression(
+                bbox_outputs, conf_thres=conf_thres, nms_thres=nms_thres)
+            plot_image_with_detections(
+                model.fake_B, detections_nms,  model.A_label, ax=ax_grids[0][1])
 
-        # Real B
-        # de-normalize the image before feed into the detector net
-        loss_detector_b, bbox_outputs = model.netDetectorB(
-            model.real_B*0.5+0.5, model.A_label)
-        detections_nms = util_detector.non_max_suppression(
-            bbox_outputs, conf_thres=conf_thres, nms_thres=nms_thres)
-        plot_image_with_detections(model.real_B, detections_nms,  ax=ax_grids[1][0])
+            # Real B
+            # de-normalize the image before feed into the detector net
+            loss_detector_b, bbox_outputs = model.netDetectorB(
+                model.real_B*0.5+0.5, model.A_label)
+            detections_nms = util_detector.non_max_suppression(
+                bbox_outputs, conf_thres=conf_thres, nms_thres=nms_thres)
+            plot_image_with_detections(model.real_B, detections_nms,  ax=ax_grids[1][0])
 
         # Fake A
         # de-normalize the image before feed into the detector net
@@ -405,11 +406,12 @@ def plot_analysis_double_task(model, data, figsize=[12, 12],
         if plot_detections:
             # labeled_B
             # de-normalize the image before feed into the detector net
-            loss_detector_b, bbox_outputs = model.netDetectorB(
-                model.labeled_B*0.5+0.5, model.labeled_B_label)
-            detections_nms = util_detector.non_max_suppression(
-                bbox_outputs, conf_thres=conf_thres, nms_thres=nms_thres)
-            plot_image_with_detections(model.labeled_B, detections_nms,  model.labeled_B_label, ax=ax_grids[0][2])
+            if hasattr(model,'netDetectorB'):
+                loss_detector_b, bbox_outputs = model.netDetectorB(
+                    model.labeled_B*0.5+0.5, model.labeled_B_label)
+                detections_nms = util_detector.non_max_suppression(
+                    bbox_outputs, conf_thres=conf_thres, nms_thres=nms_thres)
+                plot_image_with_detections(model.labeled_B, detections_nms,  model.labeled_B_label, ax=ax_grids[0][2])
             # fake_labeled_A
             # de-normalize the image before feed into the detector net
             loss_detector_b, bbox_outputs = model.netDetectorA(
