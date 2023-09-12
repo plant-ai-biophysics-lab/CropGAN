@@ -1,7 +1,7 @@
 # Based on faster_rcnn_VGG_cross_city.yaml
 _BASE_: "./Base-RCNN-C4.yaml"
 MODEL:
-  WEIGHTS: "/home/michael/ucdavis/CropGAN/adaptive_teacher/output/borden_night_raw_helios_082523/model_0020499.pth"
+  # WEIGHTS: "/home/michael/ucdavis/CropGAN/adaptive_teacher/output/borden_night_raw_helios_082523/model_0020499.pth"
   # META_ARCHITECTURE: "TwoStagePseudoLabGeneralizedRCNN"
   # META_ARCHITECTURE: "DAobjTwoStagePseudoLabGeneralizedRCNN"
   META_ARCHITECTURE: "CropGANDAobjTwoStagePseudoLabGeneralizedRCNN"
@@ -41,9 +41,8 @@ DATASETS:
   CROSS_DATASET: True
   TRAIN_LABEL: ("helios_raw_synthetic",)
   TRAIN_UNLABEL: ("real_borden_night_train",)
-  TEST: ("helios_raw_synthetic",)
-  # TEST: ("real_borden_night_test",)
-OUTPUT_DIR: ./output/delete_this
+  TEST: ("real_borden_night_test",)
+OUTPUT_DIR: ./output/borden_night_helios_raw_n_0_091123
 SEMISUPNET:
   Trainer: "ateacher"
   BBOX_THRESHOLD: 0.8

@@ -42,7 +42,7 @@ DATASETS:
   TRAIN_LABEL: ("helios_raw_synthetic",)
   TRAIN_UNLABEL: ("real_borden_day_train",)
   TEST: ("real_borden_day_test",)
-OUTPUT_DIR: ./output/borden_day_raw_helios_082523
+OUTPUT_DIR: ./output/borden_day_helios_raw_n_0_091123
 SEMISUPNET:
   Trainer: "ateacher"
   BBOX_THRESHOLD: 0.8
