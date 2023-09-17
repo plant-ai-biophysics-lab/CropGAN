@@ -25,8 +25,9 @@ from cropgan_adapteacher.util.cfg_setup import setup
 from adapteacher.modeling.meta_arch.ts_ensemble import EnsembleTSModel
 
 register_coco_instances("helios_raw_synthetic", {}, "/home/michael/datasets/cropgan_coco/helios_raw_synthetic/train/_annotations.coco.json", "/home/michael/datasets/cropgan_coco/helios_raw_synthetic/train/")
+register_coco_instances("helios_raw_synthetic_val", {}, "/home/michael/datasets/cropgan_coco/helios_raw_synthetic/valid/_annotations.coco.json", "/home/michael/datasets/cropgan_coco/helios_raw_synthetic/valid/")
 register_coco_instances("helios_plus_cropgan_n_1", {}, "/home/michael/datasets/cropgan_coco/cropgan_generated_n_1/train/_annotations.coco.json", "/home/michael/datasets/cropgan_coco/cropgan_generated_n_1/train/")
-register_coco_instances("helios_plus_cropgan_adaptive", {}, "/home/michael/datasets/cropgan_coco/cropgan_adaptive_n_0_090623/train/_annotations.coco.json", "/home/michael/datasets/cropgan_coco/cropgan_adaptive_n_0_090623/train/")
+register_coco_instances("helios_plus_cropgan_adaptive", {}, "/home/michael/datasets/cropgan_coco/cropgan_adaptive_n_0_091123/train/_annotations.coco.json", "/home/michael/datasets/cropgan_coco/cropgan_adaptive_n_0_091123/train/")
 register_coco_instances("real_borden_night_train", {}, "/home/michael/datasets/cropgan_coco/borden_night_real/train/_annotations.coco.json", "/home/michael/datasets/cropgan_coco/borden_night_real/train")
 register_coco_instances("real_borden_night_test", {}, "/home/michael/datasets/cropgan_coco/borden_night_real/test/_annotations.coco.json", "/home/michael/datasets/cropgan_coco/borden_night_real/test/")
 register_coco_instances("real_borden_day_train", {}, "/home/michael/datasets/cropgan_coco/borden_day_real/train/_annotations.coco.json", "/home/michael/datasets/cropgan_coco/borden_day_real/train")
