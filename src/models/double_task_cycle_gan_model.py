@@ -60,6 +60,7 @@ class DoubleTaskCycleGanModel(BaseModel):
             parser.add_argument('--lambda_identity', type=float, default=0.5, help='use identity mapping. Setting lambda_identity other than 0 has an effect of scaling the weight of the identity mapping loss. For example, if the weight of the identity loss should be 10 times smaller than the weight of the reconstruction loss, please set lambda_identity = 0.1')
             parser.add_argument('--lambda_detector_b', type=float, default=0.0, help='weight for detector loss on fake B (G_B(A))')
             parser.add_argument('--lambda_detector_a', type=float, default=0.0, help='weight for detector loss on fake A (G_A(B))')
+            parser.add_argument('--lambda_detector_a_rec_a', type=float, default=0.0, help='weight for detector loss on rec A G_B((G_A(B)))')
             parser.add_argument('--refine_detector_b_step', type=int, default=0, help='number of steps to refine detector b on one shot image')
 
 
@@ -116,11 +117,11 @@ class DoubleTaskCycleGanModel(BaseModel):
         # self.netDetectorA = self.build_darknet_model(opt=opt, model_weights = opt.detector_a_weights, device=device, detector_name="a")
         # self.netDetectorB = self.build_darknet_model(opt=opt, model_weights = opt.detector_b_weights, device=device, detector_name="b")
         self.netDetectorA = self.build_detectron2_model(opt=opt, model_weights = opt.detector_a_weights, device=device, detector_name="a")
-        # self.netDetectorB = self.build_detectron2_model(opt=opt, model_weights = opt.detector_b_weights, device=device, detector_name="b")
+        self.netDetectorB = self.build_detectron2_model(opt=opt, model_weights = opt.detector_b_weights, device=device, detector_name="b")
         
         # Set in evaluation mode
         self.netDetectorA.eval()  
-        # self.netDetectorB.eval()  
+        self.netDetectorB.eval()  
 
         if self.isTrain:
             if opt.lambda_identity > 0.0:  # only works when input and output images have the same number of channels
@@ -136,13 +137,13 @@ class DoubleTaskCycleGanModel(BaseModel):
             # initialize optimizers; schedulers will be automatically created by function <BaseModel.setup>.
             self.optimizer_G = torch.optim.Adam(itertools.chain(self.netG_A.parameters(), self.netG_B.parameters()), lr=opt.lr, betas=(opt.beta1, 0.999))
             self.optimizer_D = torch.optim.Adam(itertools.chain(self.netD_A.parameters(), self.netD_B.parameters()), lr=opt.lr, betas=(opt.beta1, 0.999))
-            # self.optimizer_detector_a = torch.optim.Adam(self.netDetectorA.parameters(), lr=opt.lr)
-            # self.optimizer_detector_b = torch.optim.Adam(self.netDetectorB.parameters(), lr=opt.lr)
+            self.optimizer_detector_a = torch.optim.Adam(self.netDetectorA.parameters(), lr=opt.lr)
+            self.optimizer_detector_b = torch.optim.Adam(self.netDetectorB.parameters(), lr=opt.lr)
 
             self.optimizers.append(self.optimizer_G)
             self.optimizers.append(self.optimizer_D)
-            # self.optimizers.append(self.optimizer_detector_a)
-            # self.optimizers.append(self.optimizer_detector_b)
+            self.optimizers.append(self.optimizer_detector_a)
+            self.optimizers.append(self.optimizer_detector_b)
 
 
             # double task
@@ -317,21 +318,20 @@ class DoubleTaskCycleGanModel(BaseModel):
             loss_D_B2 = self.backward_D_basic(self.netD_B, self.real_A, fake_labeled_A)
             self.loss_D_B += loss_D_B2
     
-    def backward_Detector_B(self):
-        """Calculate Detector B loss for Fake B and label A"""
-        lambda_detector_b = self.opt.lambda_detector_b
+    # #MHS: Not in use
+    # def backward_Detector_B(self):
+    #     """Calculate Detector B loss for Fake B and label A"""
+    #     lambda_detector_b = self.opt.lambda_detector_b
 
-        if lambda_detector_b > 0:
-            image = self.fake_B[0,...]
-            instances = self.create_detectron2_target_instance(image = image, labels = self.A_label)
-            detector_input = [{"image":image, "instances":instances}]
-            # loss_detector_b, self.bbox_outputs = self.netDetectorA(self.fake_B*0.5+0.5, self.A_label) # de-normalize the image before feed into the detector net
-            loss_dict, _, _, _ = self.netDetectorA(detector_input, val_mode=True) # Adaptive Teacher returns: dict, [], [], None
-            loss_detector_b = loss_dict['loss_cls'] + loss_dict['loss_box_reg'] + loss_dict['loss_D_img_s']
-            self.loss_detector_b = lambda_detector_b * loss_detector_b
-        else:
-            self.loss_detector_b = 0
-        return self.loss_detector_b 
+    #     if lambda_detector_b > 0:
+    #         detector_input = self.create_detectron2_target_instance(image = self.fake_B, labels = self.A_label)
+    #         # loss_detector_b, self.bbox_outputs = self.netDetectorA(self.fake_B*0.5+0.5, self.A_label) # de-normalize the image before feed into the detector net
+    #         loss_dict, _, _, _ = self.netDetectorA(detector_input, val_mode=True) # Adaptive Teacher returns: dict, [], [], None
+    #         loss_detector_b = loss_dict['loss_cls'] + loss_dict['loss_box_reg'] + loss_dict['loss_D_img_s']
+    #         self.loss_detector_b = lambda_detector_b * loss_detector_b
+    #     else:
+    #         self.loss_detector_b = 0
+    #     return self.loss_detector_b 
 
     def backward_G(self):
         """Calculate the loss for generators G_A and G_B"""
@@ -340,7 +340,8 @@ class DoubleTaskCycleGanModel(BaseModel):
         lambda_B = self.opt.lambda_B
         lambda_detector_a = self.opt.lambda_detector_a
         lambda_detector_b = self.opt.lambda_detector_b
-        
+        lambda_detector_a_rec_a = self.opt.lamba_detector_a_rec_a
+
         # Identity loss
         if lambda_idt > 0:
             # G_A should be identity if real_B is fed: ||G_A(B) - B||
@@ -365,9 +366,7 @@ class DoubleTaskCycleGanModel(BaseModel):
 
         # Detector task loss
         if lambda_detector_b > 0:
-            image = self.fake_B[0,...]
-            instances = self.create_detectron2_target_instance(image = image, labels = self.A_label)
-            detector_input = [{"image":image, "instances":instances}]
+            detector_input = self.create_detectron2_target_instance(image = self.fake_B, labels = self.A_label)
             loss_dict, _, _, _ = self.netDetectorA(detector_input, val_mode=True) # Adaptive Teacher returns: dict, [], [], None
             # loss_detector_b, self.bbox_outputs = self.netDetectorA(self.fake_B*0.5+0.5, self.A_label) # de-normalize the image before feed into the detector net
             loss_detector_b = loss_dict['loss_cls'] + loss_dict['loss_box_reg'] + loss_dict['loss_D_img_s']
@@ -376,9 +375,7 @@ class DoubleTaskCycleGanModel(BaseModel):
             self.loss_detector_b = 0
 
         if lambda_detector_a > 0 and self.fake_labeled_A is not None:
-            image = self.fake_B[0,...]
-            instances = self.create_detectron2_target_instance(image = image, labels = self.A_label)
-            detector_input = [{"image":image, "instances":instances}]
+            detector_input = self.create_detectron2_target_instance(image = self.fake_B, labels = self.A_label)
             loss_dict, _, _, _ = self.netDetectorA(detector_input, val_mode=True) # Adaptive Teacher returns: dict, [], [], None
             # loss_detector_b, self.bbox_outputs = self.netDetectorA(self.fake_B*0.5+0.5, self.A_label) # de-normalize the image before feed into the detector net
             loss_detector_a = loss_dict['loss_cls'] + loss_dict['loss_box_reg'] + loss_dict['loss_D_img_s']
@@ -388,10 +385,21 @@ class DoubleTaskCycleGanModel(BaseModel):
             self.loss_detector_a = 0
             self.loss_G_B2 = 0
 
+        # TODO: Add a loss for self.netDetectorA applied to rec_A and A_label
+        if lambda_detector_a_rec_a > 0 and self.rec_A is not None:
+            detector_input = self.create_detectron2_target_instance(image = self.rec_A, labels = self.A_label)
+            loss_dict, _, _, _ = self.netDetectorA(detector_input, val_mode=True) # Adaptive Teacher returns: dict, [], [], None
+            # loss_detector_b, self.bbox_outputs = self.netDetectorA(self.fake_B*0.5+0.5, self.A_label) # de-normalize the image before feed into the detector net
+            loss_detector_a_rec_a = loss_dict['loss_cls'] + loss_dict['loss_box_reg'] + loss_dict['loss_D_img_s']
+            self.loss_detector_a_rec_a = lambda_detector_a_rec_a * loss_detector_a_rec_a
+        else:
+            self.loss_detector_a_rec_a = 0
+            
         # combined loss and calculate gradients
         self.loss_G = self.loss_G_A + self.loss_G_B + self.loss_cycle_A + \
                       self.loss_cycle_B + self.loss_idt_A + \
-                      self.loss_idt_B + self.loss_detector_b + self.loss_detector_a + self.loss_G_B2
+                      self.loss_idt_B + self.loss_detector_b + self.loss_detector_a + self.loss_G_B2 + \
+                      self.loss_detector_a_rec_a
         self.loss_G.backward()
 
 
@@ -402,15 +410,17 @@ class DoubleTaskCycleGanModel(BaseModel):
         x1, y1 = x-w/2, y-h/2
         x2, y2 = x+w/2, y+h/2
         return torch.stack([x1, y1, x2, y2]).T
-    
+
     def create_detectron2_target_instance(self, image: torch.Tensor, labels: torch.Tensor):
+        image = image[0,...]
         if len(labels.shape) == 1:
             labels = torch.empty([0,5])
         height, width = image.shape[-2], image.shape[-1]
         box_classes = labels[:,0].to(torch.int64)
         boxes = Boxes(tensor=self.yolo2coco_bboxes(labels[:,1:5].T))
         instances = Instances(image_size=[height,width], gt_boxes=boxes, gt_classes=box_classes)
-        return instances
+        output = [{"image":image, "instances":instances}]
+        return output
 
 
     def compute_visuals(self):
