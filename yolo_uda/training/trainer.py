@@ -161,10 +161,12 @@ def train(
             target_features = torch.cat(target_features, dim=1).to(device)
             
             # discriminator step and calculate discriminator loss
-            discriminator_source_loss = discriminator_step(discriminator, source_features, zeros_label)
-            discriminator_target_loss = discriminator_step(discriminator, target_features, ones_label)
+            discriminator_source_loss = discriminator_step(discriminator, source_features, zeros_label, mini_batch_size)
+            discriminator_target_loss = discriminator_step(discriminator, target_features, ones_label, mini_batch_size)
             discriminator_loss = discriminator_source_loss + discriminator_target_loss
 
+            # run backward propagation
+            yolo_loss.backward()
             yolo_loss.backward(retain_graph=True) 
             discriminator_loss.backward()
             
@@ -178,7 +180,7 @@ def train(
                     for threshold, value in model.hyperparams['lr_steps']:
                         if batches_done > threshold:
                             lr *= value
-                ## log the learning rate here ##
+                # log the learning rate
                 wandb.log({"lr": lr})
                 # set leraning rate
                 for g in optimizer.param_groups:
@@ -189,7 +191,7 @@ def train(
                 # Reset gradients
                 optimizer.zero_grad()
         
-            ## log progress here ##
+            # log progress
             if verbose:
                 print(AsciiTable(
                         [
@@ -241,3 +243,5 @@ def train(
                     "f1": f1.mean(),
                     "mAP": AP.mean()
                 })
+    
+    return model

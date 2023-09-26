@@ -10,8 +10,9 @@ from pytorchyolo.test import _create_validation_data_loader
 from loader import prepare_data, _create_data_loader
 from models import load_model, Discriminator, Upsample
 from trainer import train
+from datetime import datetime
 
-def main(args, hyperparams):
+def main(args, hyperparams, run):
     
     # select device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -24,7 +25,7 @@ def main(args, hyperparams):
     
     # load models
     model = load_model(args.config, args.pretrained_weights).to(device)
-    discriminator = Discriminator(alpha=hyperparams.alpha).to(device)
+    discriminator = Discriminator(alpha=args.alpha).to(device)
     
     # create dataloaders
     mini_batch_size = model.hyperparams['batch'] // model.hyperparams['subdivisions']
@@ -60,7 +61,7 @@ def main(args, hyperparams):
         print("Unknown optimizer. Please choose between (adam, sgd).")
         
     # train
-    train(
+    model = train(
         model=model,
         discriminator=discriminator,
         dataloader=dataloader,
@@ -73,18 +74,28 @@ def main(args, hyperparams):
         epochs=args.epochs,
         evaluate_interval=args.eval_interval,
         class_names=["0"],
-        iou_thresh=hyperparams.iou_thresh,
-        conf_thresh=hyperparams.conf_thresh,
-        nms_thresh=hyperparams.nms_thresh
+        iou_thresh=hyperparams["iou_thresh"],
+        conf_thresh=hyperparams["conf_thresh"],
+        nms_thresh=hyperparams["nms_thresh"]
     )
+
+    # save model weights
+    save_dir = os.path.join(args.save, f"{datetime.today().strftime('%Y-%m-%d')}_{run.id}.pth")
+    torch.save(model.state_dict(), save_dir)
+    best_model = wandb.Artifact(args.name, type="model")
+    best_model.add_file(save_dir)
+    run.log_artifact(best_model)
+    run.link_artifact(best_model, "model-registry/yolo-uda")
     
 if __name__ == '__main__':
     ap = argparse.ArgumentParser()
     ap.add_argument("-k", type=int, default=0,
                     help="Number of target examples to add to training set")
-    ap.add_argument("-t", "--train_path", required=True,
+    ap.add_argument("-a", "--alpha", type=float, required=True,
+                    help="Constant for gradient reversal layer")
+    ap.add_argument("-t", "--train-path", required=True,
                     help="Path to file containing training images")
-    ap.add_argument("-v", "--val_path", required=True,
+    ap.add_argument("-v", "--val-path", required=True,
                     help="Path to file containing validation images")
     ap.add_argument("-c", "--config", required=True,
                     help="YOLOv3 configuration file")
@@ -92,24 +103,28 @@ if __name__ == '__main__':
                     help="Path to pretrained weights")
     ap.add_argument("-e", "--epochs", type=int, default=300,
                     help="Number of training epochs")
-    ap.add_argument("--n_cpu", type=int, default=6,
+    ap.add_argument("--n-cpu", type=int, default=6,
                     help="Number of cpu threads")
     ap.add_argument("--eval_interval", type=int, default=1,
                     help="Evaluate model every eval_interval epochs")
-    ap.add_argument("--verbose", action="store_true", default=False,
+    ap.add_argument("--verbose", action="store_true",
                     help="Prints training progress and results")
-    ap.add_argument("--name", type=str, default="None",
+    ap.add_argument("-n", "--name", type=str, default="None",
                     help="Run name for wandb logging")
+    ap.add_argument("-s", "--save", type=str, required=True,
+                    help="Where to save model weights")
     args = ap.parse_args()
     
     # hyperparams
     hyperparams = {
-    "batch_size": 8,
+    "epochs": args.epochs,
     "iou_thresh": 0.5,
     "conf_thresh": 0.3,
     "nms_thresh": 0.5,
-    "alpha": 1.0,
-    "img_size": 416,
+    "alpha": args.alpha,
+    "k": args.k,
+    "img_size": 416, # from here downwards is in yolov3.cfg
+    "batch_size": 4,
     "momentum": 0.9,
     "decay": 0.0005,
     "angle": 0,
@@ -121,8 +136,8 @@ if __name__ == '__main__':
     }
 
     # initialize wandb
-    run = wandb.init(project='yolo-uda', name=args.notes)
+    run = wandb.init(project='yolo-uda', name=args.name)
     wandb.config.update(hyperparams)
     
     # start run
-    main(args, hyperparams)
+    main(args, hyperparams, run)
