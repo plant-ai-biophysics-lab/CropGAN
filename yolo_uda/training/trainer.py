@@ -166,7 +166,6 @@ def train(
             discriminator_loss = discriminator_source_loss + discriminator_target_loss
 
             # run backward propagation
-            yolo_loss.backward()
             yolo_loss.backward(retain_graph=True) 
             discriminator_loss.backward()
             
