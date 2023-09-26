@@ -259,8 +259,6 @@ def run():
                         help="Path to directory with images to inference")
     parser.add_argument("-g", "--groundtruth", type=str,
                         help="Path to directory with groundtruth boxes")
-    parser.add_argument("-c", "--classes", type=str, default="data/coco.names", 
-                        help="Path to classes label file (.names)")
     parser.add_argument("-o", "--output", type=str, default="output", 
                         help="Path to output directory")
     parser.add_argument("-b", "--batch_size", type=int, default=1, 
@@ -277,7 +275,7 @@ def run():
     print(f"Command line arguments: {args}")
 
     # Extract class names from file
-    classes = load_classes(args.classes)  # List of class names
+    classes = ["0"]  # List of class names
 
     detect_directory(
         args.model,
