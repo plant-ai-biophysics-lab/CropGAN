@@ -2,6 +2,7 @@ import sys
 sys.path.append("/home/michael/ucdavis/adaptive_teacher")
 sys.path.append("/home/michael/ucdavis/CropGAN/adaptive_teacher")
 
+from typing import List
 import torch
 import itertools
 from util.image_pool import ImagePool
@@ -340,7 +341,7 @@ class DoubleTaskCycleGanModel(BaseModel):
         lambda_B = self.opt.lambda_B
         lambda_detector_a = self.opt.lambda_detector_a
         lambda_detector_b = self.opt.lambda_detector_b
-        lambda_detector_a_rec_a = self.opt.lamba_detector_a_rec_a
+        lambda_detector_a_rec_a = self.opt.lambda_detector_a_rec_a
 
         # Identity loss
         if lambda_idt > 0:
@@ -403,21 +404,32 @@ class DoubleTaskCycleGanModel(BaseModel):
         self.loss_G.backward()
 
 
-    def yolo2coco_bboxes(self,xywh):
-        if xywh.shape[1] == 4 and xywh.shape[0] != 4:
-            xywh = xywh.T
-        x,y,w,h = xywh
-        x1, y1 = x-w/2, y-h/2
-        x2, y2 = x+w/2, y+h/2
-        return torch.stack([x1, y1, x2, y2]).T
+    def yolo2coco_bboxes(self,yolo_box: List[float], img_height: int, img_width: int):
+        """
+         Resource: https://albumentations.ai/docs/getting_started/bounding_boxes_augmentation/
+         #:~:text=In%20coco%20%2C%20a%20bounding%20box,345%2C%20322%2C%20117%5D%20.
+         Yolo: [x_center, y_center, width, height] - normalized for image dimensions in [0,1]
+         CoCo: [x_min, y_min, width, height] - x_min,y_min is top left corner of image, in pixels.
+            Both use the top-left corner of the image as origin, x is horizontal, y is verical.
+        Note: Adaptive Teacher expects float32
+        """
+        if yolo_box.shape[1] == 4 and yolo_box.shape[0] != 4:
+            yolo_box = yolo_box.T
+        x_center,y_center,yolo_w,yolo_h = yolo_box
+        x_min, y_min = x_center-yolo_w/2, y_center-yolo_h/2
+        coco_x = x_min * img_width
+        coco_y = y_min * img_height
+        coco_w = yolo_w * img_width
+        coco_h = yolo_h * img_height
+        return torch.round(torch.stack([coco_x, coco_y, coco_w, coco_h]).T)
 
     def create_detectron2_target_instance(self, image: torch.Tensor, labels: torch.Tensor):
         image = image[0,...]
         if len(labels.shape) == 1:
             labels = torch.empty([0,5])
         height, width = image.shape[-2], image.shape[-1]
-        box_classes = labels[:,0].to(torch.int64)
-        boxes = Boxes(tensor=self.yolo2coco_bboxes(labels[:,1:5].T))
+        boxes = Boxes(tensor=self.yolo2coco_bboxes(yolo_box=labels[:,2:6].T, img_height=height, img_width=width))
+        box_classes = labels[:,1].to(torch.int64)
         instances = Instances(image_size=[height,width], gt_boxes=boxes, gt_classes=box_classes)
         output = [{"image":image, "instances":instances}]
         return output

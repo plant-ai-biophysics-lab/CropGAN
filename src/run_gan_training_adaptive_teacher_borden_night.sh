@@ -20,6 +20,7 @@ python -u train_cropgan.py --dataroot $dataroot \
              --crop_size 256\
              --lambda_detector_b 2.0\
              --lambda_detector_a 0.2\
+             --lambda_detector_a_rec_a 1.0\
              --batch_size 1\
              --cycle_gan_epoch 1\
              --detector_eval_on_real_period 500\
