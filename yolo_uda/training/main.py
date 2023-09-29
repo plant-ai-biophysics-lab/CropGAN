@@ -18,7 +18,7 @@ def main(args, hyperparams, run):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
     # prepare data
-    prepare_data(args.train_path, args.val_path, args.k)
+    prepare_data(args.train_path, args.val_path, args.gan_path, args.k)
     target_imgs_list = os.listdir(args.val_path)
     t = transforms.Compose([transforms.Resize((416,416)),transforms.ToTensor()])
     target_imgs = [t(Image.open(os.path.join(args.val_path, img))).float() for img in target_imgs_list]
@@ -97,6 +97,8 @@ if __name__ == '__main__':
                     help="Path to file containing training images")
     ap.add_argument("-v", "--val-path", required=True,
                     help="Path to file containing validation images")
+    ap.add_argument("-g", "--gan-path", required=True,
+                    help="Path to generated target images from CropGAN")
     ap.add_argument("-c", "--config", required=True,
                     help="YOLOv3 configuration file")
     ap.add_argument("-p", "--pretrained_weights", required=True,
