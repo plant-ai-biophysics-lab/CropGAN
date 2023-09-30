@@ -1,7 +1,7 @@
 # Based on faster_rcnn_VGG_cross_city.yaml
 _BASE_: "./Base-RCNN-C4.yaml"
 MODEL:
-  # WEIGHTS: "/home/michael/ucdavis/CropGAN/adaptive_teacher/output/cropgan_adaptive_teacher_n_0_090623/model_0026999.pth"
+  WEIGHTS: "/home/michael/ucdavis/CropGAN/adaptive_teacher/output/cropgan_adaptive_teacher_n_0_090623/model_0026999.pth"
   # WEIGHTS: "/home/michael/ucdavis/CropGAN/adaptive_teacher/output/borden_night_raw_helios_082523/model_0020499.pth"
   # META_ARCHITECTURE: "TwoStagePseudoLabGeneralizedRCNN"
   # META_ARCHITECTURE: "DAobjTwoStagePseudoLabGeneralizedRCNN"

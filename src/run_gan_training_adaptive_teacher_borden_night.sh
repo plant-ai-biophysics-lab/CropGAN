@@ -6,7 +6,7 @@ dataroot="/home/michael/ucdavis/CropGANData/helios_synthetic_datasets/sytheticVi
 checkpoints_dir="/home/michael/ucdavis/CropGANData/output/BordenNight/adaptive_teacher_091623/"
 # detector_a: obj detection on the synthetic source domain
 # detector_b: obj detection on the target real domain
-detector_a_weights="/home/michael/ucdavis/CropGAN/adaptive_teacher/output/adaptive_teacher_cropgan_adaptive_091523_on_source_20k/model_final.pth"
+detector_a_weights="/home/michael/ucdavis/CropGAN/adaptive_teacher/output/borden_night_helios_raw_n_0_091123/model_0021999.pth"
 # detector_b_weights="/home/michael/ucdavis/CropGANData/output/BordenNight/train1_val1/checkpoints/best_mAp_yolov3_ckpt.pth"
 python -u train_cropgan.py --dataroot $dataroot \
              --num_threads 4\
