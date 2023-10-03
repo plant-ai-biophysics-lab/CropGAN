@@ -99,7 +99,6 @@ def discriminator_step(
     Return:
       Tensor = cross entropy loss between the prediction and the ground truth.
     """
-
     outputs = discriminator(map_features)
     outputs = outputs.view(mini_batch_size, -1)
     discriminator_loss = cross_entropy(outputs, labels)
@@ -166,9 +165,11 @@ def train(
             discriminator_loss = discriminator_source_loss + discriminator_target_loss
 
             # run backward propagation
-            yolo_loss.backward(retain_graph=True) 
-            discriminator_loss.backward()
-            
+            # yolo_loss.backward(retain_graph=True) 
+            # discriminator_loss.backward()
+            loss = yolo_loss + discriminator_loss
+            loss.backward()
+
             # run optimizer
             if batches_done % model.hyperparams['subdivisions'] == 0:
                 # adapt learning rate
@@ -201,15 +202,16 @@ def train(
                             ["Loss", float(loss_components[3])],
                             ["Source loss", float(discriminator_source_loss)],
                             ["Target loss", float(discriminator_target_loss)],
-                            ["Batch loss", to_cpu(yolo_loss).item()]
+                            ["YOLO Batch loss", to_cpu(yolo_loss).item()]
                         ]).table)
             wandb.log({
                 "iou_loss": float(loss_components[0]),
                 "obj_loss": float(loss_components[1]),
                 "cls_loss": float(loss_components[2]),
-                "loss": float(loss_components[3]),
+                "yolo_loss": float(loss_components[3]),
                 "dscm_src_loss": float(discriminator_source_loss),
-                "dscm_trgt_loss": float(discriminator_target_loss)
+                "dscm_trgt_loss": float(discriminator_target_loss),
+                # "total loss": float(loss)
                 })
             model.seen += imgs.size(0)
             

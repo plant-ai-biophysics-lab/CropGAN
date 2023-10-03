@@ -6,7 +6,7 @@ from pytorchyolo.utils.datasets import ListDataset
 from pytorchyolo.utils.augmentations import AUGMENTATION_TRANSFORMS
 from pytorchyolo.utils.utils import worker_seed_set
 
-def prepare_data(train_path, val_path, gan_path, K=0):
+def prepare_data(train_path, val_path, K=0):
 
     # create list to store file paths
     paths = [val_path, train_path]
@@ -26,8 +26,8 @@ def prepare_data(train_path, val_path, gan_path, K=0):
     
     # add target examples if K > 0
     if K > 0:
-        sample = random.sample(range(0, len(gan_paths)), K)
-        examples = [gan_paths[i] for i in sample]
+        sample = random.sample(range(0, len(val_paths)), K)
+        examples = [val_paths[i] for i in sample]
         train_paths += examples
 
     # write to txt file
