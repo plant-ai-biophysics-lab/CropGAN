@@ -34,7 +34,7 @@ def main(args, hyperparams, run):
         batch_size=hyperparams['batch_size'],
         img_size=hyperparams['img_size'],
         n_cpu=args.n_cpu,
-        multiscale_training=True
+        multiscale_training=False
     )
     validation_dataloader = _create_validation_data_loader(
         os.path.dirname(args.val_path)+"/val.txt",
