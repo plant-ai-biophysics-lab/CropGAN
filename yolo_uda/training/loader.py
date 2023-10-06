@@ -12,7 +12,6 @@ def prepare_data(train_path, val_path, K=0):
     paths = [val_path, train_path]
     train_paths = []
     val_paths = []
-    gan_paths = [os.path.join(gan_path, path) for path in os.listdir(gan_path)]
 
     # loop through the files in the directory
     for i in range(0,2):
