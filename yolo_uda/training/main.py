@@ -36,6 +36,14 @@ def main(args, hyperparams, run):
         n_cpu=args.n_cpu,
         multiscale_training=False
     )
+    target_dataloader = _create_data_loader(
+        os.path.dirname(args.val_path)+"/val.txt",
+        batch_size=hyperparams['batch_size'],
+        img_size=hyperparams['img_size'],
+        n_cpu=args.n_cpu,
+        multiscale_training=False
+    )
+    
     validation_dataloader = _create_validation_data_loader(
         os.path.dirname(args.val_path)+"/val.txt",
         mini_batch_size,
@@ -68,7 +76,7 @@ def main(args, hyperparams, run):
         device=device,
         optimizer=optimizer,
         mini_batch_size=mini_batch_size,
-        target_imgs=target_imgs,
+        target_dataloader=target_dataloader,
         validation_dataloader=validation_dataloader,
         verbose=args.verbose,
         epochs=args.epochs,

@@ -2,6 +2,7 @@ import random
 import torch
 import tqdm
 import wandb
+import itertools
 import numpy as np
 
 from torch import nn
@@ -111,7 +112,7 @@ def train(
     device: torch.device,
     optimizer: torch.optim.Optimizer,
     mini_batch_size: int,
-    target_imgs: list,
+    target_dataloader: DataLoader,
     validation_dataloader: DataLoader,
     verbose: bool = False,
     epochs: int = 10,
@@ -131,15 +132,21 @@ def train(
         model.train() # set yolo model to training mode
         discriminator.train() # set discriminator to training mode
         
-        random.shuffle(target_imgs)
+        # random.shuffle(target_imgs)
+        target_dataloader_iter = iter(target_dataloader)
+        target_dataloader_iter = itertools.cycle(target_dataloader_iter)
         
-        for batch_i, (_, imgs, targets) in enumerate(tqdm.tqdm(dataloader, desc=f"Training Epoch {epoch}")):
-            sample = random.sample(range(0, len(target_imgs)), mini_batch_size)
+        for batch_i, (data_source, data_target) in enumerate(
+            tqdm.tqdm(zip(dataloader, target_dataloader_iter), desc=f"Training Epoch {epoch}")
+        ):
+            
             batches_done = len(dataloader) * epoch + batch_i
             
+            # get imgs from data
+            _, imgs, targets = data_source
+            _, imgs_t, _ = data_target
             source_imgs = imgs.to(device)
-            target_imgs = [target_imgs[i] for i in sample]
-            target_imgs = torch.stack(target_imgs, dim=0).to(device)
+            target_imgs = imgs_t.to(device)
             targets = targets.to(device)
             
             # run source pass, upsample features and calculate yolo loss
@@ -165,8 +172,6 @@ def train(
             discriminator_loss = discriminator_source_loss + discriminator_target_loss
 
             # run backward propagation
-            # yolo_loss.backward(retain_graph=True) 
-            # discriminator_loss.backward()
             loss = yolo_loss + discriminator_loss
             loss.backward()
 
@@ -214,6 +219,9 @@ def train(
                 # "total loss": float(loss)
                 })
             model.seen += imgs.size(0)
+            
+            if batch_i >= len(dataloader):
+                break
             
         # save model to checkpoint file
         # if epoch % args.checkpoint_interval == 0:
