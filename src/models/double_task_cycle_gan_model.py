@@ -426,10 +426,10 @@ class DoubleTaskCycleGanModel(BaseModel):
     def create_detectron2_target_instance(self, image: torch.Tensor, labels: torch.Tensor):
         image = image[0,...]
         if len(labels.shape) == 1:
-            labels = torch.empty([0,5])
+            labels = torch.empty([0,6])
         height, width = image.shape[-2], image.shape[-1]
         boxes = Boxes(tensor=self.yolo2coco_bboxes(yolo_box=labels[:,2:6].T, img_height=height, img_width=width))
-        box_classes = labels[:,1].to(torch.int64)
+        box_classes = labels[:,1].to(torch.int64) 
         instances = Instances(image_size=[height,width], gt_boxes=boxes, gt_classes=box_classes)
         output = [{"image":image, "instances":instances}]
         return output
