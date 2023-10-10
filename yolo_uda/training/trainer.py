@@ -103,6 +103,7 @@ def discriminator_step(
     outputs = discriminator(map_features)
     outputs = outputs.view(mini_batch_size, -1)
     discriminator_loss = cross_entropy(outputs, labels)
+    
     return discriminator_loss
 
 def train(
@@ -124,6 +125,7 @@ def train(
 ):
     upsample_4 = Upsample(scale_factor=4, mode="nearest")
     upsample_2 = Upsample(scale_factor=2, mode="nearest")
+    
     for epoch in range(1, epochs+1):
         
         print("\n---- Training Model ----")
@@ -131,13 +133,9 @@ def train(
         # set to training mode
         model.train() # set yolo model to training mode
         discriminator.train() # set discriminator to training mode
-        
-        # random.shuffle(target_imgs)
-        target_dataloader_iter = iter(target_dataloader)
-        target_dataloader_iter = itertools.cycle(target_dataloader_iter)
-        
+
         for batch_i, (data_source, data_target) in enumerate(
-            tqdm.tqdm(zip(dataloader, target_dataloader_iter), desc=f"Training Epoch {epoch}")
+            tqdm.tqdm(zip(dataloader, target_dataloader), desc=f"Training Epoch {epoch}")
         ):
             
             batches_done = len(dataloader) * epoch + batch_i
@@ -215,13 +213,9 @@ def train(
                 "cls_loss": float(loss_components[2]),
                 "yolo_loss": float(loss_components[3]),
                 "dscm_src_loss": float(discriminator_source_loss),
-                "dscm_trgt_loss": float(discriminator_target_loss),
-                # "total loss": float(loss)
+                "dscm_trgt_loss": float(discriminator_target_loss)
                 })
             model.seen += imgs.size(0)
-            
-            if batch_i >= len(dataloader):
-                break
             
         # save model to checkpoint file
         # if epoch % args.checkpoint_interval == 0:
