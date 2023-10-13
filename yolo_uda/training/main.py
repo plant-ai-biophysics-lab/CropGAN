@@ -19,9 +19,6 @@ def main(args, hyperparams, run):
     
     # prepare data
     prepare_data(args.train_path, args.val_path, args.k)
-    target_imgs_list = os.listdir(args.val_path)
-    t = transforms.Compose([transforms.Resize((416,416)),transforms.ToTensor()])
-    target_imgs = [t(Image.open(os.path.join(args.val_path, img))).float() for img in target_imgs_list]
     
     # load models
     model = load_model(args.config, args.pretrained_weights).to(device)
@@ -53,20 +50,17 @@ def main(args, hyperparams, run):
     
     # create optimizer
     params = [p for p in model.parameters() if p.requires_grad]
-    if (model.hyperparams['optimizer'] in [None, "adam"]):
-        optimizer = optim.Adam(
-            params,
-            lr=model.hyperparams['learning_rate'],
-            weight_decay=model.hyperparams['decay'],
-        )
-    elif (model.hyperparams['optimizer'] == "sgd"):
-        optimizer = optim.SGD(
-            params,
-            lr=model.hyperparams['learning_rate'],
-            weight_decay=model.hyperparams['decay'],
-            momentum=model.hyperparams['momentum'])
-    else:
-        print("Unknown optimizer. Please choose between (adam, sgd).")
+    params_classifier = [p for p in discriminator.parameters() if p.requires_grad]
+    optimizer = optim.Adam(
+        params,
+        lr=model.hyperparams['learning_rate'],
+        weight_decay=model.hyperparams['decay']
+    )
+    optimizer_classifier = optim.Adam(
+        params_classifier,
+        lr=0.001,
+        weight_decay=0.0001
+    )
         
     # train
     model = train(
@@ -75,6 +69,7 @@ def main(args, hyperparams, run):
         dataloader=dataloader,
         device=device,
         optimizer=optimizer,
+        optimizer_classifier=optimizer_classifier,
         mini_batch_size=mini_batch_size,
         target_dataloader=target_dataloader,
         validation_dataloader=validation_dataloader,
@@ -148,4 +143,5 @@ if __name__ == '__main__':
     wandb.config.update(hyperparams)
     
     # start run
+    # run = None
     main(args, hyperparams, run)

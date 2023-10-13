@@ -203,13 +203,14 @@ class Discriminator(nn.Module):
             nn.ReLU(),
             nn.Linear(h, h),
             nn.ReLU(),
-            nn.Linear(h, out_size),
+            nn.Linear(h, out_size)
         )
         self.out_size = out_size
 
     def forward(self, x):
         """"""
-        return self.net(x).squeeze(1)
+        # return self.net(x).squeeze(1)
+        return self.net(x)
 
 #####################
 # YOLO architecture #

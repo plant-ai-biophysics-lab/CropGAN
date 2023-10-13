@@ -1,19 +1,20 @@
-import random
 import torch
 import tqdm
 import wandb
-import itertools
 import numpy as np
 
 from torch import nn
 from terminaltables import AsciiTable
 from torch.utils.data import DataLoader
 from torch.autograd import Variable
+from torchmetrics.classification import BinaryAccuracy
 from pytorchyolo.utils.loss import compute_loss
 from pytorchyolo.utils.utils import to_cpu, ap_per_class, get_batch_statistics, non_max_suppression, xywh2xyxy
 from models import Upsample
 
+# for loss calculations
 cross_entropy = nn.CrossEntropyLoss()
+binary_accuracy = BinaryAccuracy(threshold=0.5).to('cuda')
 
 def print_eval_stats(metrics_output, class_names, verbose):
     if metrics_output is not None:
@@ -101,10 +102,16 @@ def discriminator_step(
       Tensor = cross entropy loss between the prediction and the ground truth.
     """
     outputs = discriminator(map_features)
+    
+    # calculate accuracy
+    pred_labels = outputs[:, 0, 0, 0]
+    discriminator_acc = binary_accuracy(pred_labels, labels)
+    
+    # calculate loss
     outputs = outputs.view(mini_batch_size, -1)
     discriminator_loss = cross_entropy(outputs, labels)
     
-    return discriminator_loss
+    return discriminator_loss, discriminator_acc
 
 def train(
     model: nn.Module,
@@ -112,6 +119,7 @@ def train(
     dataloader: DataLoader,
     device: torch.device,
     optimizer: torch.optim.Optimizer,
+    optimizer_classifier: torch.optim.Optimizer,
     mini_batch_size: int,
     target_dataloader: DataLoader,
     validation_dataloader: DataLoader,
@@ -137,12 +145,13 @@ def train(
         for batch_i, (data_source, data_target) in enumerate(
             tqdm.tqdm(zip(dataloader, target_dataloader), desc=f"Training Epoch {epoch}")
         ):
-            
             batches_done = len(dataloader) * epoch + batch_i
             
             # get imgs from data
             _, imgs, targets = data_source
             _, imgs_t, _ = data_target
+            if len(imgs) < mini_batch_size or len(imgs_t) < mini_batch_size:
+                break
             source_imgs = imgs.to(device)
             target_imgs = imgs_t.to(device)
             targets = targets.to(device)
@@ -165,8 +174,8 @@ def train(
             target_features = torch.cat(target_features, dim=1).to(device)
             
             # discriminator step and calculate discriminator loss
-            discriminator_source_loss = discriminator_step(discriminator, source_features, zeros_label, mini_batch_size)
-            discriminator_target_loss = discriminator_step(discriminator, target_features, ones_label, mini_batch_size)
+            discriminator_source_loss, discriminator_source_acc = discriminator_step(discriminator, source_features, zeros_label, mini_batch_size)
+            discriminator_target_loss, discriminator_target_acc = discriminator_step(discriminator, target_features, ones_label, mini_batch_size)
             discriminator_loss = discriminator_source_loss + discriminator_target_loss
 
             # run backward propagation
@@ -184,15 +193,17 @@ def train(
                         if batches_done > threshold:
                             lr *= value
                 # log the learning rate
-                wandb.log({"lr": lr})
+                # wandb.log({"lr": lr})
                 # set leraning rate
                 for g in optimizer.param_groups:
                     g['lr'] = lr
                     
                 # Run optimizer
                 optimizer.step()
+                optimizer_classifier.step()
                 # Reset gradients
                 optimizer.zero_grad()
+                optimizer_classifier.zero_grad()
         
             # log progress
             if verbose:
@@ -213,7 +224,9 @@ def train(
                 "cls_loss": float(loss_components[2]),
                 "yolo_loss": float(loss_components[3]),
                 "dscm_src_loss": float(discriminator_source_loss),
-                "dscm_trgt_loss": float(discriminator_target_loss)
+                "dscm_trgt_loss": float(discriminator_target_loss),
+                "dscm_src_acc": float(discriminator_source_acc),
+                "dscm_trgt_acc": float(discriminator_target_acc)
                 })
             model.seen += imgs.size(0)
             
