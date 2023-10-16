@@ -87,7 +87,7 @@ class DoubleTaskCycleGanModel(BaseModel):
         self.visual_names = visual_names_A + visual_names_B  # combine visualizations for A and B
         # specify the models you want to save to the disk. The training/test scripts will call <BaseModel.save_networks> and <BaseModel.load_networks>.
         if self.isTrain:
-            self.model_names = ['G_A', 'G_B', 'D_A', 'D_B', 'DetectorA']
+            self.model_names = ['G_A', 'G_B', 'D_A', 'D_B', 'DetectorA', 'DetectorB']
         else:  # during test time, only load Gs
             self.model_names = ['G_A', 'G_B']
 
@@ -454,6 +454,7 @@ class DoubleTaskCycleGanModel(BaseModel):
         
         # G_A and G_B
         self.set_requires_grad([self.netD_A, self.netD_B], False)  # Ds require no gradients when optimizing Gs
+        #TODO: Why is netDetectorB not in here? It is like this on main.
         self.set_requires_grad([self.netDetectorA], False)  # Ds require no gradients when optimizing Gs
         self.optimizer_G.zero_grad()  # set G_A and G_B's gradients to zero
         self.backward_G()             # calculate gradients for G_A and G_B
