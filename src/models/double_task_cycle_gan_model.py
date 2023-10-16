@@ -110,15 +110,17 @@ class DoubleTaskCycleGanModel(BaseModel):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print("Detector Device: ", device)
         """
-        #TODO: Wrap builders in a package-agnostic builder.
         self.netDetectorA = Darknet(opt.task_model_def, img_size=opt.detector_img_size).to(device)
         self.netDetectorB = Darknet(opt.task_model_def, img_size=opt.detector_img_size).to(device)
         """
-       
-        # self.netDetectorA = self.build_darknet_model(opt=opt, model_weights = opt.detector_a_weights, device=device, detector_name="a")
-        # self.netDetectorB = self.build_darknet_model(opt=opt, model_weights = opt.detector_b_weights, device=device, detector_name="b")
-        self.netDetectorA = self.build_detectron2_model(opt=opt, model_weights = opt.detector_a_weights, device=device, detector_name="a")
-        self.netDetectorB = self.build_detectron2_model(opt=opt, model_weights = opt.detector_b_weights, device=device, detector_name="b")
+        #TODO: Wrap builders in a package-agnostic builder.
+        self.use_darknet = True
+        if self.use_darknet:
+            self.netDetectorA = self.build_darknet_model(opt=opt, model_weights = opt.detector_a_weights, device=device, detector_name="a")
+            self.netDetectorB = self.build_darknet_model(opt=opt, model_weights = opt.detector_b_weights, device=device, detector_name="b")
+        else:
+            self.netDetectorA = self.build_detectron2_model(opt=opt, model_weights = opt.detector_a_weights, device=device, detector_name="a")
+            self.netDetectorB = self.build_detectron2_model(opt=opt, model_weights = opt.detector_b_weights, device=device, detector_name="b")
         
         # Set in evaluation mode
         self.netDetectorA.eval()  
@@ -367,19 +369,23 @@ class DoubleTaskCycleGanModel(BaseModel):
 
         # Detector task loss
         if lambda_detector_b > 0:
-            detector_input = self.create_detectron2_target_instance(image = self.fake_B, labels = self.A_label)
-            loss_dict, _, _, _ = self.netDetectorA(detector_input, val_mode=True) # Adaptive Teacher returns: dict, [], [], None
-            # loss_detector_b, self.bbox_outputs = self.netDetectorA(self.fake_B*0.5+0.5, self.A_label) # de-normalize the image before feed into the detector net
-            loss_detector_b = loss_dict['loss_cls'] + loss_dict['loss_box_reg'] + loss_dict['loss_D_img_s']
+            if self.use_darknet:
+                loss_detector_b, self.bbox_outputs = self.netDetectorA(self.fake_B*0.5+0.5, self.A_label) # de-normalize the image before feed into the detector net
+            else:
+                detector_input = self.create_detectron2_target_instance(image = self.fake_B, labels = self.A_label)
+                loss_dict, _, _, _ = self.netDetectorA(detector_input, val_mode=True) # Adaptive Teacher returns: dict, [], [], None
+                loss_detector_b = loss_dict['loss_cls'] + loss_dict['loss_box_reg'] + loss_dict['loss_D_img_s']
             self.loss_detector_b = lambda_detector_b * loss_detector_b
         else:
             self.loss_detector_b = 0
 
         if lambda_detector_a > 0 and self.fake_labeled_A is not None:
-            detector_input = self.create_detectron2_target_instance(image = self.fake_B, labels = self.A_label)
-            loss_dict, _, _, _ = self.netDetectorA(detector_input, val_mode=True) # Adaptive Teacher returns: dict, [], [], None
-            # loss_detector_b, self.bbox_outputs = self.netDetectorA(self.fake_B*0.5+0.5, self.A_label) # de-normalize the image before feed into the detector net
-            loss_detector_a = loss_dict['loss_cls'] + loss_dict['loss_box_reg'] + loss_dict['loss_D_img_s']
+            if self.use_darknet:
+                loss_detector_a, self.bbox_outputs_a = self.netDetectorA(self.fake_labeled_A*0.5+0.5, self.labeled_B_label) # de-normalize the image before feed into the detector net
+            else:
+                detector_input = self.create_detectron2_target_instance(image = self.fake_labeled_A, labels = self.labeled_B_label)
+                loss_dict, _, _, _ = self.netDetectorA(detector_input, val_mode=True) # Adaptive Teacher returns: dict, [], [], None
+                loss_detector_a = loss_dict['loss_cls'] + loss_dict['loss_box_reg'] + loss_dict['loss_D_img_s']
             self.loss_G_B2 = self.criterionGAN(self.netD_B(self.fake_labeled_A), True)
             self.loss_detector_a = lambda_detector_a * loss_detector_a
         else:
@@ -388,10 +394,12 @@ class DoubleTaskCycleGanModel(BaseModel):
 
         # TODO: Add a loss for self.netDetectorA applied to rec_A and A_label
         if lambda_detector_a_rec_a > 0 and self.rec_A is not None:
-            detector_input = self.create_detectron2_target_instance(image = self.rec_A, labels = self.A_label)
-            loss_dict, _, _, _ = self.netDetectorA(detector_input, val_mode=True) # Adaptive Teacher returns: dict, [], [], None
-            # loss_detector_b, self.bbox_outputs = self.netDetectorA(self.fake_B*0.5+0.5, self.A_label) # de-normalize the image before feed into the detector net
-            loss_detector_a_rec_a = loss_dict['loss_cls'] + loss_dict['loss_box_reg'] + loss_dict['loss_D_img_s']
+            if self.use_darknet:
+                loss_detector_a_rec_a, _ = self.netDetectorA(self.rec_A*0.5+0.5, self.A_label) # de-normalize the image before feed into the detector net
+            else:
+                detector_input = self.create_detectron2_target_instance(image = self.rec_A, labels = self.A_label)
+                loss_dict, _, _, _ = self.netDetectorA(detector_input, val_mode=True) # Adaptive Teacher returns: dict, [], [], None
+                loss_detector_a_rec_a = loss_dict['loss_cls'] + loss_dict['loss_box_reg'] + loss_dict['loss_D_img_s']
             self.loss_detector_a_rec_a = lambda_detector_a_rec_a * loss_detector_a_rec_a
         else:
             self.loss_detector_a_rec_a = 0
