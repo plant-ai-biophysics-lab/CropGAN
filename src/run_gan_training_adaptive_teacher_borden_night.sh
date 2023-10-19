@@ -2,8 +2,8 @@
 detector_b_weights can be selected from the weight you trained in STEP1
 """
 task_model_def="/home/michael/ucdavis/CropGAN/adaptive_teacher/configs/faster_rcnn_VGG_borden_night_helios_raw.yaml"
-dataroot="/home/michael/ucdavis/CropGANData/helios_synthetic_datasets/sytheticVis2bordenNight_n=0/"
-checkpoints_dir="/home/michael/ucdavis/CropGANData/output/BordenNight/adaptive_teacher_100123/"
+dataroot="/home/michael/ucdavis/CropGANData/helios_synthetic_datasets/sytheticVis2bordenNight_n=1/"
+checkpoints_dir="/home/michael/ucdavis/CropGANData/output/BordenNight/adaptive_teacher_n=1_101823/"
 # detector_a: obj detection on the synthetic source domain
 # detector_b: obj detection on the target real domain
 detector_a_weights="/home/michael/ucdavis/CropGAN/adaptive_teacher/output/borden_night_helios_raw_n_0_091123/model_0021999.pth"
