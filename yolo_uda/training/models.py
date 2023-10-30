@@ -47,8 +47,8 @@ def create_modules(module_defs: List[dict]) -> Tuple[dict, nn.ModuleList]:
     """
     hyperparams = module_defs.pop(0)
     hyperparams.update({
-        'batch': int(hyperparams['batch']),
-        'subdivisions': int(hyperparams['subdivisions']),
+        # 'batch': int(hyperparams['batch_size']),
+        # 'subdivisions': int(hyperparams['subdivisions']),
         'width': int(hyperparams['width']),
         'height': int(hyperparams['height']),
         'channels': int(hyperparams['channels']),
@@ -186,7 +186,7 @@ class Discriminator(nn.Module):
     A 3-layer MLP + Greadient Reversal Layer for domain classification.
     """
 
-    def __init__(self, in_size=52, h=2048, out_size=1, alpha=1.0):
+    def __init__(self, in_size=255*13*13, h=2048, out_size=1, alpha=1.0):
         """
         Arguments:
             in_size: size of the input
@@ -197,20 +197,22 @@ class Discriminator(nn.Module):
 
         super().__init__()
         self.h = h
+        # TODO: Consider adding Dropout layers after the ReLU layers
         self.net = nn.Sequential(
             GradientReversal(alpha=alpha),
             nn.Linear(in_size, h),
             nn.ReLU(),
             nn.Linear(h, h),
             nn.ReLU(),
-            nn.Linear(h, out_size)
+            nn.Linear(h, out_size),
+            nn.Sigmoid()
         )
         self.out_size = out_size
 
     def forward(self, x):
         """"""
         # return self.net(x).squeeze(1)
-        return self.net(x)
+        return self.net(torch.flatten(x,1)).squeeze(-1)
 
 #####################
 # YOLO architecture #
