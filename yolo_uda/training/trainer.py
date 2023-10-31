@@ -13,7 +13,8 @@ from pytorchyolo.utils.utils import to_cpu, ap_per_class, get_batch_statistics, 
 from models import Upsample
 
 # for loss calculations
-cross_entropy = nn.CrossEntropyLoss()
+# cross_entropy = nn.CrossEntropyLoss()
+bce = nn.BCELoss()
 binary_accuracy = BinaryAccuracy(threshold=0.5).to('cuda')
 
 def print_eval_stats(metrics_output, class_names, verbose):
@@ -109,7 +110,8 @@ def discriminator_step(
     
     # calculate loss
     # outputs = outputs.view(mini_batch_size, -1)
-    discriminator_loss = cross_entropy(outputs, labels.float())
+    # discriminator_loss = cross_entropy(outputs, labels.float())
+    discriminator_loss = bce(outputs, labels.float())
     
     return discriminator_loss, discriminator_acc
 
@@ -239,7 +241,8 @@ def train(
                 "dscm_src_loss": float(discriminator_source_loss),
                 "dscm_trgt_loss": float(discriminator_target_loss),
                 "dscm_src_acc": float(discriminator_source_acc),
-                "dscm_trgt_acc": float(discriminator_target_acc)
+                "dscm_trgt_acc": float(discriminator_target_acc),
+                "dscm_acc": float(0.5*(discriminator_source_acc+discriminator_target_acc))
                 })
             model.seen += imgs_s.size(0)
             
