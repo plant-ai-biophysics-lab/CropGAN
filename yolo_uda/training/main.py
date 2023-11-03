@@ -25,8 +25,10 @@ def main(args, hyperparams, run):
     discriminator = Discriminator(alpha=args.alpha).to(device)
     
     # create dataloaders
-    mini_batch_size = model.hyperparams['batch'] // model.hyperparams['subdivisions']
-    dataloader = _create_data_loader(
+    # mini_batch_size = model.hyperparams['batch'] // model.hyperparams['subdivisions']
+    mini_batch_size = hyperparams['batch_size']
+    
+    source_dataloader = _create_data_loader(
         os.path.dirname(args.train_path)+"/train.txt",
         batch_size=hyperparams['batch_size'],
         img_size=hyperparams['img_size'],
@@ -66,7 +68,7 @@ def main(args, hyperparams, run):
     model = train(
         model=model,
         discriminator=discriminator,
-        dataloader=dataloader,
+        source_dataloader=source_dataloader,
         device=device,
         optimizer=optimizer,
         optimizer_classifier=optimizer_classifier,
@@ -83,12 +85,12 @@ def main(args, hyperparams, run):
     )
 
     # save model weights
-    save_dir = os.path.join(args.save, f"{datetime.today().strftime('%Y-%m-%d')}_{run.id}.pth")
+    save_dir = os.path.join(args.save, f"{datetime.today().strftime('%Y-%m-%d')}.pth")
     torch.save(model.state_dict(), save_dir)
     best_model = wandb.Artifact(args.name, type="model")
     best_model.add_file(save_dir)
-    run.log_artifact(best_model)
-    run.link_artifact(best_model, "model-registry/yolo-uda")
+    # run.log_artifact(best_model)
+    # run.link_artifact(best_model, "model-registry/yolo-uda")
     
 if __name__ == '__main__':
     ap = argparse.ArgumentParser()
@@ -102,8 +104,8 @@ if __name__ == '__main__':
                     help="Path to file containing validation images")
     ap.add_argument("-c", "--config", required=True,
                     help="YOLOv3 configuration file")
-    ap.add_argument("-p", "--pretrained_weights", required=True,
-                    help="Path to pretrained weights")
+    ap.add_argument("-p", "--pretrained_weights",
+                    help="Path to pretrained weights", default=None)
     ap.add_argument("-e", "--epochs", type=int, default=300,
                     help="Number of training epochs")
     ap.add_argument("--n-cpu", type=int, default=6,

@@ -13,7 +13,8 @@ from pytorchyolo.utils.utils import to_cpu, ap_per_class, get_batch_statistics, 
 from models import Upsample
 
 # for loss calculations
-cross_entropy = nn.CrossEntropyLoss()
+# cross_entropy = nn.CrossEntropyLoss()
+bce = nn.BCELoss()
 binary_accuracy = BinaryAccuracy(threshold=0.5).to('cuda')
 
 def print_eval_stats(metrics_output, class_names, verbose):
@@ -104,19 +105,20 @@ def discriminator_step(
     outputs = discriminator(map_features)
     
     # calculate accuracy
-    pred_labels = outputs[:, 0, 0, 0]
-    discriminator_acc = binary_accuracy(pred_labels, labels)
+    # pred_labels = outputs[:, 0, 0, 0]
+    discriminator_acc = binary_accuracy(outputs, labels)
     
     # calculate loss
-    outputs = outputs.view(mini_batch_size, -1)
-    discriminator_loss = cross_entropy(outputs, labels)
+    # outputs = outputs.view(mini_batch_size, -1)
+    # discriminator_loss = cross_entropy(outputs, labels.float())
+    discriminator_loss = bce(outputs, labels.float())
     
     return discriminator_loss, discriminator_acc
 
 def train(
     model: nn.Module,
     discriminator: nn.Module,
-    dataloader: DataLoader,
+    source_dataloader: DataLoader,
     device: torch.device,
     optimizer: torch.optim.Optimizer,
     optimizer_classifier: torch.optim.Optimizer,
@@ -131,8 +133,10 @@ def train(
     conf_thresh: float = 0.5,
     nms_thresh: float = 0.5,
 ):
-    upsample_4 = Upsample(scale_factor=4, mode="nearest")
-    upsample_2 = Upsample(scale_factor=2, mode="nearest")
+    # upsample_4 = Upsample(scale_factor=4, mode="nearest")
+    # upsample_2 = Upsample(scale_factor=2, mode="nearest")
+    downsample_2 = Upsample(scale_factor=0.5, mode="nearest")
+    downsample_4 = Upsample(scale_factor=0.25, mode="nearest")
     
     for epoch in range(1, epochs+1):
         
@@ -143,36 +147,47 @@ def train(
         discriminator.train() # set discriminator to training mode
 
         for batch_i, (data_source, data_target) in enumerate(
-            tqdm.tqdm(zip(dataloader, target_dataloader), desc=f"Training Epoch {epoch}")
+            tqdm.tqdm(zip(source_dataloader, target_dataloader), desc=f"Training Epoch {epoch}")
         ):
-            batches_done = len(dataloader) * epoch + batch_i
+            batches_done = len(source_dataloader) * (epoch-1) + batch_i
             
             # get imgs from data
-            _, imgs, targets = data_source
+            _, imgs_s, targets = data_source
             _, imgs_t, _ = data_target
-            if len(imgs) < mini_batch_size or len(imgs_t) < mini_batch_size:
+            if len(imgs_s) < mini_batch_size or len(imgs_t) < mini_batch_size:
                 break
-            source_imgs = imgs.to(device)
+            source_imgs = imgs_s.to(device)
             target_imgs = imgs_t.to(device)
             targets = targets.to(device)
             
             # run source pass, upsample features and calculate yolo loss
             source_outputs, source_features = model(source_imgs)
-            source_features[0] = upsample_4(source_features[0])
-            source_features[1] = upsample_2(source_features[1])
+            # source_features[0] = upsample_4(source_features[0])
+            # source_features[1] = upsample_2(source_features[1])
+            source_features[1] = downsample_2(source_features[1])
+            source_features[2] = downsample_4(source_features[2])
             yolo_loss, loss_components = compute_loss(source_outputs, targets, model)
             
             # run target pass upsample features
             zeros_label = torch.zeros(mini_batch_size, dtype=torch.long, device=device)
             ones_label = torch.ones(mini_batch_size, dtype=torch.long, device=device)
             target_outputs, target_features = model(target_imgs)
-            target_features[0] = upsample_4(target_features[0])
-            target_features[1] = upsample_2(target_features[1])
+            # target_features[0] = upsample_4(target_features[0])
+            # target_features[1] = upsample_2(target_features[1])
+            target_features[1] = downsample_2(target_features[1])
+            target_features[2] = downsample_4(target_features[2])
             
             # concatenate source and target features
-            source_features = torch.cat(source_features, dim=1).to(device)
-            target_features = torch.cat(target_features, dim=1).to(device)
-            
+            # source_features = torch.cat(source_features, dim=1).to(device)
+            # target_features = torch.cat(target_features, dim=1).to(device)
+            source_features = source_features[0]+source_features[1]+source_features[2]
+            target_features = target_features[0]+target_features[1]+target_features[2]
+
+            # Combine source and target batches for discriminator
+            # features = torch.cat([source_features,target_features],axis=0)
+            # labels = torch.cat([zeros_label,ones_label],axis=0)
+            # discriminator_loss, discriminator_acc = discriminator_step(discriminator, features, label, 2*mini_batch_size)
+
             # discriminator step and calculate discriminator loss
             discriminator_source_loss, discriminator_source_acc = discriminator_step(discriminator, source_features, zeros_label, mini_batch_size)
             discriminator_target_loss, discriminator_target_acc = discriminator_step(discriminator, target_features, ones_label, mini_batch_size)
@@ -183,27 +198,27 @@ def train(
             loss.backward()
 
             # run optimizer
-            if batches_done % model.hyperparams['subdivisions'] == 0:
-                # adapt learning rate
-                lr = model.hyperparams['learning_rate']
-                if batches_done < model.hyperparams['burn_in']:
-                    lr *= (batches_done / model.hyperparams['burn_in'])
-                else:
-                    for threshold, value in model.hyperparams['lr_steps']:
-                        if batches_done > threshold:
-                            lr *= value
-                # log the learning rate
-                # wandb.log({"lr": lr})
-                # set leraning rate
-                for g in optimizer.param_groups:
-                    g['lr'] = lr
-                    
-                # Run optimizer
-                optimizer.step()
-                optimizer_classifier.step()
-                # Reset gradients
-                optimizer.zero_grad()
-                optimizer_classifier.zero_grad()
+            # if batches_done % model.hyperparams['subdivisions'] == 0:
+            # adapt learning rate
+            lr = model.hyperparams['learning_rate']
+            if batches_done < model.hyperparams['burn_in']:
+                lr *= (batches_done / model.hyperparams['burn_in'])
+            else:
+                for threshold, value in model.hyperparams['lr_steps']:
+                    if batches_done > threshold:
+                        lr *= value
+            # log the learning rate
+            wandb.log({"lr": lr})
+            # set leraning rate
+            for g in optimizer.param_groups:
+                g['lr'] = lr
+                
+            # Run optimizer
+            optimizer.step()
+            optimizer_classifier.step()
+            # Reset gradients
+            optimizer.zero_grad()
+            optimizer_classifier.zero_grad()
         
             # log progress
             if verbose:
@@ -226,9 +241,10 @@ def train(
                 "dscm_src_loss": float(discriminator_source_loss),
                 "dscm_trgt_loss": float(discriminator_target_loss),
                 "dscm_src_acc": float(discriminator_source_acc),
-                "dscm_trgt_acc": float(discriminator_target_acc)
+                "dscm_trgt_acc": float(discriminator_target_acc),
+                "dscm_acc": float(0.5*(discriminator_source_acc+discriminator_target_acc))
                 })
-            model.seen += imgs.size(0)
+            model.seen += imgs_s.size(0)
             
         # save model to checkpoint file
         # if epoch % args.checkpoint_interval == 0:
