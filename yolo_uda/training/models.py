@@ -199,7 +199,7 @@ class Discriminator(nn.Module):
         self.h = h
         # TODO: Consider adding Dropout layers after the ReLU layers
         self.net = nn.Sequential(
-            GradientReversal(alpha=alpha),
+            # GradientReversal(alpha=alpha),
             nn.Linear(in_size, h),
             nn.ReLU(),
             nn.Linear(h, h),

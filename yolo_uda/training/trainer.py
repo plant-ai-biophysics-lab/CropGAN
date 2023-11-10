@@ -184,17 +184,18 @@ def train(
             target_features = target_features[0]+target_features[1]+target_features[2]
 
             # Combine source and target batches for discriminator
-            # features = torch.cat([source_features,target_features],axis=0)
-            # labels = torch.cat([zeros_label,ones_label],axis=0)
-            # discriminator_loss, discriminator_acc = discriminator_step(discriminator, features, label, 2*mini_batch_size)
+            features = torch.cat([source_features,target_features],axis=0)
+            labels = torch.cat([zeros_label,ones_label],axis=0)
+            discriminator_loss, discriminator_acc = discriminator_step(discriminator, features, labels, 2*mini_batch_size)
 
             # discriminator step and calculate discriminator loss
-            discriminator_source_loss, discriminator_source_acc = discriminator_step(discriminator, source_features, zeros_label, mini_batch_size)
-            discriminator_target_loss, discriminator_target_acc = discriminator_step(discriminator, target_features, ones_label, mini_batch_size)
-            discriminator_loss = discriminator_source_loss + discriminator_target_loss
+            # discriminator_source_loss, discriminator_source_acc = discriminator_step(discriminator, source_features, zeros_label, mini_batch_size)
+            # discriminator_target_loss, discriminator_target_acc = discriminator_step(discriminator, target_features, ones_label, mini_batch_size)
+            # discriminator_loss = discriminator_source_loss + discriminator_target_loss
 
             # run backward propagation
-            loss = yolo_loss + discriminator_loss
+            # loss = yolo_loss + discriminator_loss
+            loss = discriminator_loss
             loss.backward()
 
             # run optimizer
@@ -229,8 +230,8 @@ def train(
                             ["Object loss", float(loss_components[1])],
                             ["Class loss", float(loss_components[2])],
                             ["Loss", float(loss_components[3])],
-                            ["Source loss", float(discriminator_source_loss)],
-                            ["Target loss", float(discriminator_target_loss)],
+                            # ["Source loss", float(discriminator_source_loss)],
+                            # ["Target loss", float(discriminator_target_loss)],
                             ["YOLO Batch loss", to_cpu(yolo_loss).item()]
                         ]).table)
             wandb.log({
@@ -238,11 +239,12 @@ def train(
                 "obj_loss": float(loss_components[1]),
                 "cls_loss": float(loss_components[2]),
                 "yolo_loss": float(loss_components[3]),
-                "dscm_src_loss": float(discriminator_source_loss),
-                "dscm_trgt_loss": float(discriminator_target_loss),
-                "dscm_src_acc": float(discriminator_source_acc),
-                "dscm_trgt_acc": float(discriminator_target_acc),
-                "dscm_acc": float(0.5*(discriminator_source_acc+discriminator_target_acc))
+                # "dscm_src_loss": float(discriminator_source_loss),
+                # "dscm_trgt_loss": float(discriminator_target_loss),
+                # "dscm_src_acc": float(discriminator_source_acc),
+                # "dscm_trgt_acc": float(discriminator_target_acc),
+                "dscm_acc": float(discriminator_acc),
+                "dscm_loss": float(discriminator_loss)
                 })
             model.seen += imgs_s.size(0)
             
