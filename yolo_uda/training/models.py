@@ -196,18 +196,23 @@ class Discriminator(nn.Module):
         """
 
         super().__init__()
-        self.h = h
-        # TODO: Consider adding Dropout layers after the ReLU layers
+        h_2 = int(h/2)
+        h_3 = int(h/4)
+        h_4 = int(h/8)
+
         self.net = nn.Sequential(
             # GradientReversal(alpha=alpha),
             nn.Linear(in_size, h),
             nn.ReLU(),
-            nn.Linear(h, h),
+            nn.Linear(h, h_2),
             nn.ReLU(),
-            nn.Linear(h, out_size),
+            nn.Linear(h_2, h_3),
+            nn.ReLU(),
+            nn.Linear(h_3, h_4),
+            nn.ReLU(),
+            nn.Linear(h_4, out_size),
             nn.Sigmoid()
         )
-        self.out_size = out_size
 
     def forward(self, x):
         """"""

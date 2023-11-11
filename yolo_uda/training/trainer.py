@@ -149,6 +149,10 @@ def train(
         for batch_i, (data_source, data_target) in enumerate(
             tqdm.tqdm(zip(source_dataloader, target_dataloader), desc=f"Training Epoch {epoch}")
         ):
+            # Reset gradients
+            optimizer.zero_grad()
+            optimizer_classifier.zero_grad()
+
             batches_done = len(source_dataloader) * (epoch-1) + batch_i
             
             # get imgs from data
@@ -186,7 +190,13 @@ def train(
             # Combine source and target batches for discriminator
             features = torch.cat([source_features,target_features],axis=0)
             labels = torch.cat([zeros_label,ones_label],axis=0)
-            discriminator_loss, discriminator_acc = discriminator_step(discriminator, features, labels, 2*mini_batch_size)
+            
+            # Shuffle batch
+            idx = torch.randperm(features.shape[0])
+            features_shuffled = features[idx]
+            labels_shuffled = labels[idx]
+
+            discriminator_loss, discriminator_acc = discriminator_step(discriminator, features_shuffled, labels_shuffled, 2*mini_batch_size)
 
             # discriminator step and calculate discriminator loss
             # discriminator_source_loss, discriminator_source_acc = discriminator_step(discriminator, source_features, zeros_label, mini_batch_size)
@@ -217,9 +227,7 @@ def train(
             # Run optimizer
             optimizer.step()
             optimizer_classifier.step()
-            # Reset gradients
-            optimizer.zero_grad()
-            optimizer_classifier.zero_grad()
+            
         
             # log progress
             if verbose:

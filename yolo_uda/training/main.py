@@ -60,7 +60,7 @@ def main(args, hyperparams, run):
     )
     optimizer_classifier = optim.Adam(
         params_classifier,
-        lr=0.001,
+        lr=0.0001,
         weight_decay=0.0001
     )
         
