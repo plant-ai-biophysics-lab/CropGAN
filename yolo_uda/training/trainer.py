@@ -105,15 +105,45 @@ def discriminator_step(
     outputs = discriminator(map_features)
     
     # calculate accuracy
-    # pred_labels = outputs[:, 0, 0, 0]
     discriminator_acc = binary_accuracy(outputs, labels)
     
     # calculate loss
-    # outputs = outputs.view(mini_batch_size, -1)
     # discriminator_loss = cross_entropy(outputs, labels.float())
     discriminator_loss = bce(outputs, labels.float())
     
     return discriminator_loss, discriminator_acc
+
+def compose_discriminator_batch(source_features: torch.Tensor, target_features: torch.Tensor, mini_batch_size: int, downsample_2: nn.Module, downsample_4: nn.Module, device: torch.device, shuffle: bool = True):
+    # source_features[0] = upsample_4(source_features[0])
+    # source_features[1] = upsample_2(source_features[1])
+    source_features[1] = downsample_2(source_features[1])
+    source_features[2] = downsample_4(source_features[2])
+    
+
+    # run target pass upsample features
+    zeros_label = torch.zeros(mini_batch_size, dtype=torch.long, device=device)
+    ones_label = torch.ones(mini_batch_size, dtype=torch.long, device=device)
+    # target_features[0] = upsample_4(target_features[0])
+    # target_features[1] = upsample_2(target_features[1])
+    target_features[1] = downsample_2(target_features[1])
+    target_features[2] = downsample_4(target_features[2])
+    
+    # concatenate source and target features
+    source_features = source_features[0]+source_features[1]+source_features[2]
+    target_features = target_features[0]+target_features[1]+target_features[2]
+
+    # Combine source and target batches for discriminator
+    features = torch.cat([source_features,target_features],axis=0)
+    labels = torch.cat([zeros_label,ones_label],axis=0)
+    
+    if shuffle:
+        # Shuffle batch
+        idx = torch.randperm(features.shape[0])
+        features_shuffled = features[idx]
+        labels_shuffled = labels[idx]
+        return features_shuffled, labels_shuffled
+    return features, labels
+    
 
 def train(
     model: nn.Module,
@@ -164,44 +194,22 @@ def train(
             target_imgs = imgs_t.to(device)
             targets = targets.to(device)
             
-            # run source pass, upsample features and calculate yolo loss
+            # run source pass
             source_outputs, source_features = model(source_imgs)
-            # source_features[0] = upsample_4(source_features[0])
-            # source_features[1] = upsample_2(source_features[1])
-            source_features[1] = downsample_2(source_features[1])
-            source_features[2] = downsample_4(source_features[2])
+            # Run target pass to encode features for classifier
+            target_outputs, target_features = model(target_imgs)
+            # yolo loss
             yolo_loss, loss_components = compute_loss(source_outputs, targets, model)
             
-            # run target pass upsample features
-            zeros_label = torch.zeros(mini_batch_size, dtype=torch.long, device=device)
-            ones_label = torch.ones(mini_batch_size, dtype=torch.long, device=device)
-            target_outputs, target_features = model(target_imgs)
-            # target_features[0] = upsample_4(target_features[0])
-            # target_features[1] = upsample_2(target_features[1])
-            target_features[1] = downsample_2(target_features[1])
-            target_features[2] = downsample_4(target_features[2])
+            features, labels = compose_discriminator_batch(
+                source_features=source_features, 
+                target_features=target_features, 
+                mini_batch_size=mini_batch_size, 
+                downsample_2=downsample_2, 
+                downsample_4=downsample_4, 
+                device=device)
             
-            # concatenate source and target features
-            # source_features = torch.cat(source_features, dim=1).to(device)
-            # target_features = torch.cat(target_features, dim=1).to(device)
-            source_features = source_features[0]+source_features[1]+source_features[2]
-            target_features = target_features[0]+target_features[1]+target_features[2]
-
-            # Combine source and target batches for discriminator
-            features = torch.cat([source_features,target_features],axis=0)
-            labels = torch.cat([zeros_label,ones_label],axis=0)
-            
-            # Shuffle batch
-            idx = torch.randperm(features.shape[0])
-            features_shuffled = features[idx]
-            labels_shuffled = labels[idx]
-
-            discriminator_loss, discriminator_acc = discriminator_step(discriminator, features_shuffled, labels_shuffled, 2*mini_batch_size)
-
-            # discriminator step and calculate discriminator loss
-            # discriminator_source_loss, discriminator_source_acc = discriminator_step(discriminator, source_features, zeros_label, mini_batch_size)
-            # discriminator_target_loss, discriminator_target_acc = discriminator_step(discriminator, target_features, ones_label, mini_batch_size)
-            # discriminator_loss = discriminator_source_loss + discriminator_target_loss
+            discriminator_loss, discriminator_acc = discriminator_step(discriminator, features, labels, 2*mini_batch_size)
 
             # run backward propagation
             # loss = yolo_loss + discriminator_loss
@@ -227,8 +235,7 @@ def train(
             # Run optimizer
             optimizer.step()
             optimizer_classifier.step()
-            
-        
+           
             # log progress
             if verbose:
                 print(AsciiTable(
@@ -238,25 +245,21 @@ def train(
                             ["Object loss", float(loss_components[1])],
                             ["Class loss", float(loss_components[2])],
                             ["Loss", float(loss_components[3])],
-                            # ["Source loss", float(discriminator_source_loss)],
-                            # ["Target loss", float(discriminator_target_loss)],
-                            ["YOLO Batch loss", to_cpu(yolo_loss).item()]
+                            ["Discriminator batch loss", float(discriminator_loss)],
+                            ["YOLO batch loss", to_cpu(yolo_loss).item()]
                         ]).table)
             wandb.log({
                 "iou_loss": float(loss_components[0]),
                 "obj_loss": float(loss_components[1]),
                 "cls_loss": float(loss_components[2]),
                 "yolo_loss": float(loss_components[3]),
-                # "dscm_src_loss": float(discriminator_source_loss),
-                # "dscm_trgt_loss": float(discriminator_target_loss),
-                # "dscm_src_acc": float(discriminator_source_acc),
-                # "dscm_trgt_acc": float(discriminator_target_acc),
                 "dscm_acc": float(discriminator_acc),
                 "dscm_loss": float(discriminator_loss)
                 })
             model.seen += imgs_s.size(0)
             
         # save model to checkpoint file
+        # TODO: Start saving checkpoints
         # if epoch % args.checkpoint_interval == 0:
         #     checkpoint_path = f"checkpoints/yolov3_ckpt_{epoch}.pth"
         #     print(f"---- Saving checkpoint to: '{checkpoint_path}' ----")

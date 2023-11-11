@@ -198,7 +198,7 @@ class Discriminator(nn.Module):
         super().__init__()
 
         self.net = nn.Sequential(
-            # GradientReversal(alpha=alpha),
+            GradientReversal(alpha=alpha),
             nn.Linear(in_size, h),
             nn.ReLU(),
             nn.Linear(h, h),
