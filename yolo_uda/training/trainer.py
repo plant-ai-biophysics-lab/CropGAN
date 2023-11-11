@@ -155,6 +155,7 @@ def train(
     mini_batch_size: int,
     target_dataloader: DataLoader,
     validation_dataloader: DataLoader,
+    lambda_discriminator: float = 0.5,
     verbose: bool = False,
     epochs: int = 10,
     evaluate_interval: int = 1,
@@ -212,8 +213,7 @@ def train(
             discriminator_loss, discriminator_acc = discriminator_step(discriminator, features, labels, 2*mini_batch_size)
 
             # run backward propagation
-            # loss = yolo_loss + discriminator_loss
-            loss = discriminator_loss
+            loss = yolo_loss + lambda_discriminator * discriminator_loss
             loss.backward()
 
             # run optimizer
