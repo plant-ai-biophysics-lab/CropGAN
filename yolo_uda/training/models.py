@@ -196,8 +196,7 @@ class Discriminator(nn.Module):
         """
 
         super().__init__()
-        self.h = h
-        # TODO: Consider adding Dropout layers after the ReLU layers
+
         self.net = nn.Sequential(
             GradientReversal(alpha=alpha),
             nn.Linear(in_size, h),
@@ -207,11 +206,8 @@ class Discriminator(nn.Module):
             nn.Linear(h, out_size),
             nn.Sigmoid()
         )
-        self.out_size = out_size
 
     def forward(self, x):
-        """"""
-        # return self.net(x).squeeze(1)
         return self.net(torch.flatten(x,1)).squeeze(-1)
 
 #####################

@@ -60,7 +60,7 @@ def main(args, hyperparams, run):
     )
     optimizer_classifier = optim.Adam(
         params_classifier,
-        lr=0.001,
+        lr=0.0001,
         weight_decay=0.0001
     )
         
@@ -75,6 +75,7 @@ def main(args, hyperparams, run):
         mini_batch_size=mini_batch_size,
         target_dataloader=target_dataloader,
         validation_dataloader=validation_dataloader,
+        lambda_discriminator=args.lambda_disc,
         verbose=args.verbose,
         epochs=args.epochs,
         evaluate_interval=args.eval_interval,
@@ -98,6 +99,8 @@ if __name__ == '__main__':
                     help="Number of target examples to add to training set")
     ap.add_argument("-a", "--alpha", type=float, required=True,
                     help="Constant for gradient reversal layer")
+    ap.add_argument("-l", "--lambda-disc", type=float, default=0.5,
+                    help="Weighting for discriminator loss, yolo weight is 1.0")
     ap.add_argument("-t", "--train-path", required=True,
                     help="Path to file containing training images")
     ap.add_argument("-v", "--val-path", required=True,
