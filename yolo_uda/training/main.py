@@ -117,7 +117,7 @@ if __name__ == '__main__':
                     help="Evaluate model every eval_interval epochs")
     ap.add_argument("--verbose", action="store_true",
                     help="Prints training progress and results")
-    ap.add_argument("-n", "--name", type=str, default="None",
+    ap.add_argument("-n", "--name", type=str, default="michael-test",
                     help="Run name for wandb logging")
     ap.add_argument("-s", "--save", type=str, required=True,
                     help="Where to save model weights")
@@ -132,7 +132,7 @@ if __name__ == '__main__':
     "alpha": args.alpha,
     "k": args.k,
     "img_size": 416, # from here downwards is in yolov3.cfg
-    "batch_size": 4,
+    "batch_size": 2,
     "momentum": 0.9,
     "decay": 0.0005,
     "angle": 0,

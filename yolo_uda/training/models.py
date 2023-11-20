@@ -183,7 +183,7 @@ class _GradientReversal(torch.autograd.Function):
     
 class Discriminator(nn.Module):
     """
-    A 3-layer MLP + Greadient Reversal Layer for domain classification.
+    A 3-layer MLP + Gradient Reversal Layer for domain classification.
     """
 
     def __init__(self, in_size=255*13*13, h=2048, out_size=1, alpha=1.0):
