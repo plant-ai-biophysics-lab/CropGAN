@@ -114,23 +114,23 @@ def discriminator_step(
     return discriminator_loss, discriminator_acc
 
 def compose_discriminator_batch(source_features: torch.Tensor, target_features: torch.Tensor, mini_batch_size: int, downsample_2: nn.Module, downsample_4: nn.Module, device: torch.device, shuffle: bool = True):
-    # source_features[0] = upsample_4(source_features[0])
-    # source_features[1] = upsample_2(source_features[1])
     source_features[1] = downsample_2(source_features[1])
-    source_features[2] = downsample_4(source_features[2])
+    # only used for yolov3.cfg, not yolov3-tiny.cfg
+    if len(source_features) == 3:
+        source_features[2] = downsample_4(source_features[2])
     
-
     # run target pass upsample features
     zeros_label = torch.zeros(mini_batch_size, dtype=torch.long, device=device)
     ones_label = torch.ones(mini_batch_size, dtype=torch.long, device=device)
-    # target_features[0] = upsample_4(target_features[0])
-    # target_features[1] = upsample_2(target_features[1])
+
     target_features[1] = downsample_2(target_features[1])
-    target_features[2] = downsample_4(target_features[2])
+    # only used for yolov3.cfg, not yolov3-tiny.cfg
+    if len(target_features) == 3:
+        target_features[2] = downsample_4(target_features[2])
     
     # concatenate source and target features
-    source_features = source_features[0]+source_features[1]+source_features[2]
-    target_features = target_features[0]+target_features[1]+target_features[2]
+    source_features = torch.stack(source_features).sum(axis=0)
+    target_features = torch.stack(target_features).sum(axis=0)
 
     # Combine source and target batches for discriminator
     features = torch.cat([source_features,target_features],axis=0)
