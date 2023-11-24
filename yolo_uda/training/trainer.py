@@ -58,7 +58,7 @@ def _evaluate(model, dataloader, class_names, img_size, iou_thres, conf_thres, n
 
     labels = []
     sample_metrics = []  # List of tuples (TP, confs, pred)
-    for _, imgs, targets in tqdm.tqdm(dataloader, desc="Validating"):
+    for _, imgs, targets, _ in tqdm.tqdm(dataloader, desc="Validating"):
         # Extract labels
         labels += targets[:, 1].tolist()
         # Rescale target
@@ -113,7 +113,10 @@ def discriminator_step(
     
     return discriminator_loss, discriminator_acc
 
-def compose_discriminator_batch(source_features: torch.Tensor, target_features: torch.Tensor, mini_batch_size: int, downsample_2: nn.Module, downsample_4: nn.Module, device: torch.device, shuffle: bool = True):
+def compose_discriminator_batch(source_features: torch.Tensor, target_features: torch.Tensor,
+                                mini_batch_size: int, downsample_2: nn.Module, downsample_4: nn.Module,
+                                labels_source: torch.Tensor, labels_target: torch.Tensor,
+                                device: torch.device, shuffle: bool = True):
     # source_features[0] = upsample_4(source_features[0])
     # source_features[1] = upsample_2(source_features[1])
     source_features[1] = downsample_2(source_features[1])
@@ -133,8 +136,8 @@ def compose_discriminator_batch(source_features: torch.Tensor, target_features: 
     target_features = target_features[0]+target_features[1]+target_features[2]
 
     # Combine source and target batches for discriminator
-    features = torch.cat([source_features,target_features],axis=0)
-    labels = torch.cat([zeros_label,ones_label],axis=0)
+    features = torch.cat([source_features, target_features],axis=0).to(device)
+    labels = torch.cat([labels_source, labels_target],axis=0).to(device)
     
     if shuffle:
         # Shuffle batch
@@ -177,9 +180,11 @@ def train(
         model.train() # set yolo model to training mode
         discriminator.train() # set discriminator to training mode
 
-        for batch_i, (data_source, data_target) in enumerate(
+        for batch_i, contents_ in enumerate(
             tqdm.tqdm(zip(source_dataloader, target_dataloader), desc=f"Training Epoch {epoch}")
         ):
+            (data_source, data_target) = contents_
+
             # Reset gradients
             optimizer.zero_grad()
             optimizer_classifier.zero_grad()
@@ -187,8 +192,8 @@ def train(
             batches_done = len(source_dataloader) * (epoch-1) + batch_i
             
             # get imgs from data
-            _, imgs_s, targets = data_source
-            _, imgs_t, _ = data_target
+            _, imgs_s, targets, labels_source = data_source
+            _, imgs_t, _, labels_target = data_target
             if len(imgs_s) < mini_batch_size or len(imgs_t) < mini_batch_size:
                 break
             source_imgs = imgs_s.to(device)
@@ -207,7 +212,9 @@ def train(
                 target_features=target_features, 
                 mini_batch_size=mini_batch_size, 
                 downsample_2=downsample_2, 
-                downsample_4=downsample_4, 
+                downsample_4=downsample_4,
+                labels_source=labels_source,
+                labels_target=labels_target,
                 device=device)
             
             discriminator_loss, discriminator_acc = discriminator_step(discriminator, features, labels, 2*mini_batch_size)

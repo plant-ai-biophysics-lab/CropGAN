@@ -6,14 +6,14 @@ import torch.optim as optim
 
 from PIL import Image
 from torchvision import transforms
-from pytorchyolo.test import _create_validation_data_loader
-from loader import prepare_data, _create_data_loader
+# from pytorchyolo.test import _create_validation_data_loader
+from loader import prepare_data, _create_data_loader, _create_validation_data_loader
 from models import load_model, Discriminator, Upsample
 from trainer import train
 from datetime import datetime
 
+
 def main(args, hyperparams, run):
-    
     # select device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
