@@ -30,7 +30,7 @@ def resize(image, size):
     return image
 
 
-class ImageFolder(Dataset):
+class UDAImageFolder(Dataset):
     def __init__(self, folder_path, transform=None):
         self.files = sorted(glob.glob("%s/*.*" % folder_path))
         self.transform = transform
@@ -55,7 +55,7 @@ class ImageFolder(Dataset):
         return len(self.files)
 
 
-class ListDataset(Dataset):
+class UDAListDataset(Dataset):
     def __init__(self, list_path, img_size=416, multiscale=True, transform=None):
         with open(list_path, "r") as file:
             self.label_nums = []
