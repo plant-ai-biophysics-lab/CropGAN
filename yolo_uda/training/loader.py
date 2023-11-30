@@ -101,11 +101,7 @@ def _create_validation_data_loader(img_path, batch_size, img_size, n_cpu):
     :return: Returns DataLoader
     :rtype: DataLoader
     """
-<<<<<<< HEAD
-    dataset = ListDataset(img_path, img_size=img_size, multiscale=False, transform=DEFAULT_TRANSFORMS)
-=======
     dataset = UDAListDataset(img_path, img_size=img_size, multiscale=False, transform=DEFAULT_TRANSFORMS)
->>>>>>> cfc3a12 (Changes post review)
     dataloader = DataLoader(
         dataset,
         batch_size=batch_size,
