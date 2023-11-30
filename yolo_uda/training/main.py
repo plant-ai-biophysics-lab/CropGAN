@@ -125,22 +125,22 @@ if __name__ == '__main__':
     
     # hyperparams
     hyperparams = {
-    "epochs": args.epochs,
-    "iou_thresh": 0.5,
-    "conf_thresh": 0.3,
-    "nms_thresh": 0.5,
-    "alpha": args.alpha,
-    "k": args.k,
-    "img_size": 416, # from here downwards is in yolov3.cfg
-    "batch_size": 2,
-    "momentum": 0.9,
-    "decay": 0.0005,
-    "angle": 0,
-    "saturation": 1.5,
-    "exposure": 1.5,
-    "hue": 0.1,
-    "lr": 0.0001,
-    "burn_in": 1000
+        "epochs": args.epochs,
+        "iou_thresh": 0.5,
+        "conf_thresh": 0.3,
+        "nms_thresh": 0.5,
+        "alpha": args.alpha,
+        "k": args.k,
+        "img_size": 416, # from here downwards is in yolov3.cfg
+        "batch_size": 2,
+        "momentum": 0.9,
+        "decay": 0.0005,
+        "angle": 0,
+        "saturation": 1.5,
+        "exposure": 1.5,
+        "hue": 0.1,
+        "lr": 0.0001,
+        "burn_in": 1000
     }
 
     # initialize wandb

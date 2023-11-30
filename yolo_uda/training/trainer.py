@@ -180,10 +180,10 @@ def train(
         model.train() # set yolo model to training mode
         discriminator.train() # set discriminator to training mode
 
-        for batch_i, contents_ in enumerate(
+        for batch_i, contents in enumerate(
             tqdm.tqdm(zip(source_dataloader, target_dataloader), desc=f"Training Epoch {epoch}")
         ):
-            (data_source, data_target) = contents_
+            (data_source, data_target) = contents
 
             # Reset gradients
             optimizer.zero_grad()
