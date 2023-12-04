@@ -292,8 +292,12 @@ class YOLOLayer(nn.Module):
 class Darknet(nn.Module):
     """YOLOv3 object detection model"""
 
-    def __init__(self, config_path):
+    def __init__(self, config_path: str, use_tiny: bool = None):
         super(Darknet, self).__init__()
+        # Need this for extracting feature_maps in forward()
+        if use_tiny is None:
+            use_tiny =  'tiny' in config_path
+        self.use_tiny = use_tiny
         self.module_defs = parse_model_config(config_path)
         self.hyperparams, self.module_list = create_modules(self.module_defs)
         self.yolo_layers = [layer[0]
@@ -305,6 +309,8 @@ class Darknet(nn.Module):
         feature_maps = [] # save feature maps for discriminator
         img_size = x.size(2)
         layer_outputs, yolo_outputs = [], []
+        # Use different feature map layers if yolov3 vs. yolov3-tiny
+        feature_map_layers = [15,22] if self.use_tiny else [81,93,105]
         for i, (module_def, module) in enumerate(zip(self.module_defs, self.module_list)):
             if module_def["type"] in ["convolutional", "upsample", "maxpool"]:
                 x = module(x)
@@ -320,8 +326,7 @@ class Darknet(nn.Module):
                 x = module[0](x, img_size)
                 yolo_outputs.append(x)
             layer_outputs.append(x)
-            
-            if i in [81, 93, 105]: # i starts at 0
+            if i in feature_map_layers:
                 feature_maps.append(x)
         return [yolo_outputs, feature_maps] if self.training else torch.cat(yolo_outputs, 1)
 
