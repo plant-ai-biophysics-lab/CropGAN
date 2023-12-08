@@ -101,6 +101,8 @@ if __name__ == '__main__':
                     help="Constant for gradient reversal layer")
     ap.add_argument("-l", "--lambda-disc", type=float, default=0.5,
                     help="Weighting for discriminator loss, yolo weight is 1.0")
+    ap.add_argument("-l", "--batch-size", type=int, default=2,
+                    help="Number of samples per batch.")
     ap.add_argument("-t", "--train-path", required=True,
                     help="Path to file containing training images")
     ap.add_argument("-v", "--val-path", required=True,
@@ -130,9 +132,10 @@ if __name__ == '__main__':
         "conf_thresh": 0.3,
         "nms_thresh": 0.5,
         "alpha": args.alpha,
+        "lambda": args.lambda_disc,
         "k": args.k,
         "img_size": 416, # from here downwards is in yolov3.cfg
-        "batch_size": 2,
+        "batch_size": args.batch_size,
         "momentum": 0.9,
         "decay": 0.0005,
         "angle": 0,
