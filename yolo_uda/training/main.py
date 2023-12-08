@@ -101,7 +101,7 @@ if __name__ == '__main__':
                     help="Constant for gradient reversal layer")
     ap.add_argument("-l", "--lambda-disc", type=float, default=0.5,
                     help="Weighting for discriminator loss, yolo weight is 1.0")
-    ap.add_argument("-l", "--batch-size", type=int, default=2,
+    ap.add_argument("-b", "--batch-size", type=int, default=2,
                     help="Number of samples per batch.")
     ap.add_argument("-t", "--train-path", required=True,
                     help="Path to file containing training images")
