@@ -22,6 +22,7 @@ def main(args, hyperparams, run):
     
     # load models
     model = load_model(args.config, args.pretrained_weights).to(device)
+    wandb.config.update(model.hyperparams)
     discriminator = Discriminator(alpha=args.alpha).to(device)
     
     # create dataloaders
@@ -60,10 +61,12 @@ def main(args, hyperparams, run):
     )
     optimizer_classifier = optim.Adam(
         params_classifier,
-        lr=0.0001,
-        weight_decay=0.0001
+        lr=hyperparams["learning_rate_disc"],
+        weight_decay=hyperparams["decay_disc"]
     )
-        
+
+    
+
     # train
     model = train(
         model=model,
@@ -101,6 +104,10 @@ if __name__ == '__main__':
                     help="Constant for gradient reversal layer")
     ap.add_argument("-l", "--lambda-disc", type=float, default=0.5,
                     help="Weighting for discriminator loss, yolo weight is 1.0")
+    ap.add_argument("--lr-disc", type=float, default=0.0001,
+                    help="Learning rate for discriminator")
+    ap.add_argument("--decay-disc", type=float, default=0.0001,
+                    help="Weight decay for discriminator")
     ap.add_argument("-b", "--batch-size", type=int, default=2,
                     help="Number of samples per batch.")
     ap.add_argument("-t", "--train-path", required=True,
@@ -133,17 +140,11 @@ if __name__ == '__main__':
         "nms_thresh": 0.5,
         "alpha": args.alpha,
         "lambda": args.lambda_disc,
+        "decay_disc": args.decay_disc,
         "k": args.k,
-        "img_size": 416, # from here downwards is in yolov3.cfg
+        "img_size": 416,
         "batch_size": args.batch_size,
-        "momentum": 0.9,
-        "decay": 0.0005,
-        "angle": 0,
-        "saturation": 1.5,
-        "exposure": 1.5,
-        "hue": 0.1,
-        "lr": 0.0001,
-        "burn_in": 1000
+        "learning_rate_disc": args.lr_disc,
     }
 
     # initialize wandb
@@ -151,5 +152,4 @@ if __name__ == '__main__':
     wandb.config.update(hyperparams)
     
     # start run
-    # run = None
     main(args, hyperparams, run)
