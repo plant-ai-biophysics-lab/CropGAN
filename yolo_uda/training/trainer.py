@@ -182,6 +182,11 @@ def train(
         model.train() # set yolo model to training mode
         discriminator.train() # set discriminator to training mode
 
+        # Collect discriminator accuracy over training batches
+        # Note: total is the sum of batch-level accuracy, not sample-level accuracy. 
+        # To get the average for the dataset, divide by the batch count.
+        discriminator_acc = {"total":0, "batch_count":0, "batch_size":mini_batch_size*2}
+
         for batch_i, contents in enumerate(
             tqdm.tqdm(zip(source_dataloader, target_dataloader), desc=f"Training Epoch {epoch}")
         ):
@@ -219,7 +224,9 @@ def train(
                 labels_target=labels_target,
                 device=device)
             
-            discriminator_loss, discriminator_acc = discriminator_step(discriminator, features, labels, 2*mini_batch_size)
+            discriminator_loss, batch_discriminator_acc = discriminator_step(discriminator, features, labels, 2*mini_batch_size)
+            discriminator_acc["total"] += batch_discriminator_acc
+            discriminator_acc["batch_count"] += 1
 
             # run backward propagation
             loss = yolo_loss + lambda_discriminator * discriminator_loss
@@ -262,11 +269,14 @@ def train(
                 "obj_loss": float(loss_components[1]),
                 "cls_loss": float(loss_components[2]),
                 "yolo_loss": float(loss_components[3]),
-                "dscm_acc": float(discriminator_acc),
+                # "dscm_acc": float(discriminator_acc),
                 "dscm_loss": float(discriminator_loss)
                 })
             model.seen += imgs_s.size(0)
-            
+
+        # Log discriminator accuracy over full training epoch
+        wandb.log({"dscm_acc": discriminator_acc["total"]/discriminator_acc["batch_count"]})
+
         # save model to checkpoint file
         # TODO: Start saving checkpoints
         # if epoch % args.checkpoint_interval == 0:
