@@ -274,7 +274,7 @@ def train(
             model.seen += imgs_s.size(0)
 
         # Log discriminator accuracy over full training epoch
-        wandb.log({"dscm_acc": discriminator_acc["total"]/discriminator_acc["count"]})
+        wandb.log({"dscm_acc": discriminator_acc["total"]/discriminator_acc["batch_count"]})
 
         # save model to checkpoint file
         # TODO: Start saving checkpoints
