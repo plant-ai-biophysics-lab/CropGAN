@@ -119,7 +119,7 @@ def compose_discriminator_batch(source_features: torch.Tensor, target_features: 
                                 device: torch.device, shuffle: bool = True):
     # source_features[0] = upsample_4(source_features[0])
     # source_features[1] = upsample_2(source_features[1])
-    source_features[0] = downsample_2(source_features[0])
+    source_features[1] = downsample_2(source_features[1])
     # only used for yolov3.cfg, not yolov3-tiny.cfg
     if len(source_features) == 3:
         source_features[2] = downsample_4(source_features[2])
@@ -128,7 +128,7 @@ def compose_discriminator_batch(source_features: torch.Tensor, target_features: 
     zeros_label = torch.zeros(mini_batch_size, dtype=torch.long, device=device)
     ones_label = torch.ones(mini_batch_size, dtype=torch.long, device=device)
 
-    target_features[0] = downsample_2(target_features[0])
+    target_features[1] = downsample_2(target_features[1])
     # only used for yolov3.cfg, not yolov3-tiny.cfg
     if len(target_features) == 3:
         target_features[2] = downsample_4(target_features[2])
