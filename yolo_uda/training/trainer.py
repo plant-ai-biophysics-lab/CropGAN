@@ -183,7 +183,8 @@ def train(
         discriminator.train() # set discriminator to training mode
 
         # Collect discriminator accuracy over training batches
-        # Note: total is the sum of batch-level accuracy (divided by batch size)
+        # Note: total is the sum of batch-level accuracy, not sample-level accuracy. 
+        # To get the average for the dataset, divide by the batch count.
         discriminator_acc = {"total":0, "batch_count":0, "batch_size":mini_batch_size*2}
 
         for batch_i, contents in enumerate(
