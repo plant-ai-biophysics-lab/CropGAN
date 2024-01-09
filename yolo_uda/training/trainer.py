@@ -4,6 +4,7 @@ import wandb
 import numpy as np
 
 from torch import nn
+import torch.nn.functional as F
 from terminaltables import AsciiTable
 from torch.utils.data import DataLoader
 from torch.autograd import Variable
@@ -11,6 +12,7 @@ from torchmetrics.classification import BinaryAccuracy
 from pytorchyolo.utils.loss import compute_loss
 from pytorchyolo.utils.utils import to_cpu, ap_per_class, get_batch_statistics, non_max_suppression, xywh2xyxy
 from models import Upsample
+from metrics import FeatureMapCosineSimilarity, FeatureMapEuclideanDistance
 
 # for loss calculations
 # cross_entropy = nn.CrossEntropyLoss()
@@ -186,6 +188,15 @@ def train(
         # Note: total is the sum of batch-level accuracy, not sample-level accuracy. 
         # To get the average for the dataset, divide by the batch count.
         discriminator_acc = {"total":0, "batch_count":0, "batch_size":mini_batch_size*2}
+        
+        ## Feature map similarity metrics
+        # Cosine similarity metrics
+        cosine_similarity_metrics_l15 = FeatureMapCosineSimilarity(layer="15")
+        cosine_similarity_metrics_l22 = FeatureMapCosineSimilarity(layer="22")
+
+        # Euclidean distance metrics
+        euclidean_distance_metrics_l15 = FeatureMapEuclideanDistance(layer="15")
+        euclidean_distance_metrics_l22 = FeatureMapEuclideanDistance(layer="22")
 
         for batch_i, contents in enumerate(
             tqdm.tqdm(zip(source_dataloader, target_dataloader), desc=f"Training Epoch {epoch}")
@@ -225,9 +236,8 @@ def train(
                 device=device)
             
             discriminator_loss, batch_discriminator_acc = discriminator_step(discriminator, features, labels, 2*mini_batch_size)
-            discriminator_acc["total"] += batch_discriminator_acc
-            discriminator_acc["batch_count"] += 1
-
+            
+ 
             # run backward propagation
             loss = yolo_loss + lambda_discriminator * discriminator_loss
             loss.backward()
@@ -251,7 +261,21 @@ def train(
             # Run optimizer
             optimizer.step()
             optimizer_classifier.step()
-           
+
+            # Metrics
+            # Track discriminator accuracy
+            discriminator_acc["total"] += batch_discriminator_acc
+            discriminator_acc["batch_count"] += 1
+
+            # Update cosine similarity metrics
+            # *_features[0] and *_features[1] are the feature maps of different yolo layers.
+            cosine_similarity_metrics_l15.update(source_features=source_features[0],target_features=target_features[0])
+            cosine_similarity_metrics_l22.update(source_features=source_features[1],target_features=target_features[1])
+        
+            # Update euclidean distance metrics
+            euclidean_distance_metrics_l15.update(source_features=source_features[0],target_features=target_features[0])
+            euclidean_distance_metrics_l22.update(source_features=source_features[1],target_features=target_features[1])
+          
             # log progress
             if verbose:
                 print(AsciiTable(
@@ -274,9 +298,16 @@ def train(
                 })
             model.seen += imgs_s.size(0)
 
-        # Log discriminator accuracy over full training epoch
+        # Training epoch metrics
+        # Discriminator accuracy
         wandb.log({"dscm_acc": discriminator_acc["total"]/discriminator_acc["batch_count"]})
-
+        
+        # Average cosine similarity within source, within target, and across source-target
+        # For both feature layers
+        for metric in [cosine_similarity_metrics_l15, cosine_similarity_metrics_l22, euclidean_distance_metrics_l15, euclidean_distance_metrics_l22]:
+            wandb.log(metric.return_metrics())
+            metric.reset()
+        
         # save model to checkpoint file
         # TODO: Start saving checkpoints
         # if epoch % args.checkpoint_interval == 0:
