@@ -89,7 +89,7 @@ def main(args, hyperparams, run):
     )
 
     # save model weights
-    save_dir = os.path.join(args.save, f"{datetime.today().strftime('%Y-%m-%d')}.pth")
+    save_dir = os.path.join(args.save, f"{datetime.today().strftime('%Y-%m-%d')}_{run.id}.pth")
     torch.save(model.state_dict(), save_dir)
     best_model = wandb.Artifact(args.name, type="model")
     best_model.add_file(save_dir)
@@ -148,7 +148,7 @@ if __name__ == '__main__':
     }
 
     # initialize wandb
-    run = wandb.init(project='yolo-uda', name=args.name)
+    run = wandb.init(project='yolo-uda', entity='paibl', name=args.name)
     wandb.config.update(hyperparams)
     
     # start run

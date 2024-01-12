@@ -121,26 +121,26 @@ def compose_discriminator_batch(source_features: torch.Tensor, target_features: 
                                 device: torch.device, shuffle: bool = True):
     # source_features[0] = upsample_4(source_features[0])
     # source_features[1] = upsample_2(source_features[1])
-    source_features[1] = downsample_2(source_features[1])
+    # source_features[1] = downsample_2(source_features[1])
     # only used for yolov3.cfg, not yolov3-tiny.cfg
-    if len(source_features) == 3:
-        source_features[2] = downsample_4(source_features[2])
+    # if len(source_features) == 3:
+    #     source_features[2] = downsample_4(source_features[2])
     
     # run target pass upsample features
     zeros_label = torch.zeros(mini_batch_size, dtype=torch.long, device=device)
     ones_label = torch.ones(mini_batch_size, dtype=torch.long, device=device)
 
-    target_features[1] = downsample_2(target_features[1])
+    # target_features[1] = downsample_2(target_features[1])
     # only used for yolov3.cfg, not yolov3-tiny.cfg
-    if len(target_features) == 3:
-        target_features[2] = downsample_4(target_features[2])
+    # if len(target_features) == 3:
+    #     target_features[2] = downsample_4(target_features[2])
     
     # concatenate source and target features
-    source_features = torch.stack(source_features).sum(axis=0)
-    target_features = torch.stack(target_features).sum(axis=0)
+    # source_features = torch.stack(source_features).sum(axis=0)
+    # target_features = torch.stack(target_features).sum(axis=0)
 
     # Combine source and target batches for discriminator
-    features = torch.cat([source_features, target_features],axis=0).to(device)
+    features = torch.cat([source_features[0], target_features[0]],axis=0).to(device)
     labels = torch.cat([labels_source, labels_target],axis=0).to(device)
     
     if shuffle:
@@ -191,11 +191,11 @@ def train(
         
         ## Feature map similarity metrics
         # Cosine similarity metrics
-        cosine_similarity_metrics_l15 = FeatureMapCosineSimilarity(layer="15")
+        # cosine_similarity_metrics_l15 = FeatureMapCosineSimilarity(layer="15")
         cosine_similarity_metrics_l22 = FeatureMapCosineSimilarity(layer="22")
 
         # Euclidean distance metrics
-        euclidean_distance_metrics_l15 = FeatureMapEuclideanDistance(layer="15")
+        # euclidean_distance_metrics_l15 = FeatureMapEuclideanDistance(layer="15")
         euclidean_distance_metrics_l22 = FeatureMapEuclideanDistance(layer="22")
 
         for batch_i, contents in enumerate(
@@ -269,12 +269,12 @@ def train(
 
             # Update cosine similarity metrics
             # *_features[0] and *_features[1] are the feature maps of different yolo layers.
-            cosine_similarity_metrics_l15.update(source_features=source_features[0],target_features=target_features[0])
-            cosine_similarity_metrics_l22.update(source_features=source_features[1],target_features=target_features[1])
+            # cosine_similarity_metrics_l15.update(source_features=source_features[0],target_features=target_features[0])
+            cosine_similarity_metrics_l22.update(source_features=source_features[0],target_features=target_features[0])
         
             # Update euclidean distance metrics
-            euclidean_distance_metrics_l15.update(source_features=source_features[0],target_features=target_features[0])
-            euclidean_distance_metrics_l22.update(source_features=source_features[1],target_features=target_features[1])
+            # euclidean_distance_metrics_l15.update(source_features=source_features[0],target_features=target_features[0])
+            euclidean_distance_metrics_l22.update(source_features=source_features[0],target_features=target_features[0])
           
             # log progress
             if verbose:
@@ -304,7 +304,11 @@ def train(
         
         # Average cosine similarity within source, within target, and across source-target
         # For both feature layers
-        for metric in [cosine_similarity_metrics_l15, cosine_similarity_metrics_l22, euclidean_distance_metrics_l15, euclidean_distance_metrics_l22]:
+        for metric in [
+            #cosine_similarity_metrics_l15, 
+            cosine_similarity_metrics_l22, 
+            # euclidean_distance_metrics_l15, 
+            euclidean_distance_metrics_l22]:
             wandb.log(metric.return_metrics())
             metric.reset()
         
