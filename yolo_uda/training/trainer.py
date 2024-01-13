@@ -176,6 +176,9 @@ def train(
     downsample_2 = Upsample(scale_factor=0.5, mode="nearest")
     downsample_4 = Upsample(scale_factor=0.25, mode="nearest")
     
+    # Control W&B step count
+    global_step = 0
+
     for epoch in range(1, epochs+1):
         
         print("\n---- Training Model ----")
@@ -253,7 +256,7 @@ def train(
                     if batches_done > threshold:
                         lr *= value
             # log the learning rate
-            wandb.log({"lr": lr})
+            wandb.log({"lr": lr}, step=global_step)
             # set leraning rate
             for g in optimizer.param_groups:
                 g['lr'] = lr
@@ -295,17 +298,20 @@ def train(
                 "yolo_loss": float(loss_components[3]),
                 # "dscm_acc": float(discriminator_acc),
                 "dscm_loss": float(discriminator_loss)
-                })
+                },
+                step=global_step)
             model.seen += imgs_s.size(0)
+
+            global_step += 1
 
         # Training epoch metrics
         # Discriminator accuracy
-        wandb.log({"dscm_acc": discriminator_acc["total"]/discriminator_acc["batch_count"]})
+        wandb.log({"dscm_acc": discriminator_acc["total"]/discriminator_acc["batch_count"]}, step=global_step)
         
         # Average cosine similarity within source, within target, and across source-target
         # For both feature layers
         for metric in [cosine_similarity_metrics_l15, cosine_similarity_metrics_l22, euclidean_distance_metrics_l15, euclidean_distance_metrics_l22]:
-            wandb.log(metric.return_metrics())
+            wandb.log(metric.return_metrics(), step=global_step)
             metric.reset()
         
         # save model to checkpoint file
@@ -337,6 +343,7 @@ def train(
                     "recall": recall.mean(),
                     "f1": f1.mean(),
                     "mAP": AP.mean()
-                })
+                },
+                step=global_step)
     
     return model
