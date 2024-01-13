@@ -65,8 +65,6 @@ def main(args, hyperparams, run):
         weight_decay=hyperparams["decay_disc"]
     )
 
-    
-
     # train
     model = train(
         model=model,
@@ -89,7 +87,8 @@ def main(args, hyperparams, run):
     )
 
     # save model weights
-    save_dir = os.path.join(args.save, f"{datetime.today().strftime('%Y-%m-%d')}.pth")
+    save_name = f"ckpt_last_k={args.k}_alpha={args.alpha}_lambda={args.lambda_disc}_{datetime.today().strftime('%Y-%m-%d_%H-%M-%S')}.pth"
+    save_dir = os.path.join(args.save, save_name)
     torch.save(model.state_dict(), save_dir)
     best_model = wandb.Artifact(args.name, type="model")
     best_model.add_file(save_dir)
