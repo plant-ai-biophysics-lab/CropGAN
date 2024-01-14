@@ -179,7 +179,7 @@ class _GradientReversal(torch.autograd.Function):
     def forward(ctx, input, alpha):
         wandb.log({
             "grl_forward_input_mean": input.mean().item(),
-        })
+        }, commit=False)
         ctx.alpha = alpha
         return input
 
@@ -187,7 +187,7 @@ class _GradientReversal(torch.autograd.Function):
     def backward(ctx, grad_output):
         wandb.log({
             "grl_backward_grad_mean": grad_output.mean().item(),
-        })
+        }, commit=False)
         return -ctx.alpha * grad_output, None
     
 class Discriminator(nn.Module):
@@ -297,6 +297,7 @@ class YOLOLayer(nn.Module):
         """
         yv, xv = torch.meshgrid([torch.arange(ny), torch.arange(nx)], indexing='ij')
         return torch.stack((xv, yv), 2).view((1, 1, ny, nx, 2)).float()
+
 
 class Darknet(nn.Module):
     """YOLOv3 object detection model"""
