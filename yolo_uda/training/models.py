@@ -12,6 +12,9 @@ from pytorch_metric_learning.utils import common_functions as pml_cf
 from pytorchyolo.utils.parse_config import parse_model_config
 from pytorchyolo.utils.utils import weights_init_normal
 
+import wandb
+
+
 def load_model(model_path, weights_path=None):
     """Loads the yolo model from file.
 
@@ -174,11 +177,17 @@ class GradientReversal(torch.nn.Module):
 class _GradientReversal(torch.autograd.Function):
     @staticmethod
     def forward(ctx, input, alpha):
+        wandb.log({
+            "grl_forward_input_mean": input.mean().item(),
+        })
         ctx.alpha = alpha
         return input
 
     @staticmethod
     def backward(ctx, grad_output):
+        wandb.log({
+            "grl_backward_grad_mean": grad_output.mean().item(),
+        })
         return -ctx.alpha * grad_output, None
     
 class Discriminator(nn.Module):
