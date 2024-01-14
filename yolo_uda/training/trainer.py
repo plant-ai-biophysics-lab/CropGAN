@@ -122,6 +122,7 @@ def compose_discriminator_batch(source_features: torch.Tensor, target_features: 
     # source_features[0] = upsample_4(source_features[0])
     # source_features[1] = upsample_2(source_features[1])
     source_features[1] = downsample_2(source_features[1])
+
     # only used for yolov3.cfg, not yolov3-tiny.cfg
     if len(source_features) == 3:
         source_features[2] = downsample_4(source_features[2])
@@ -138,6 +139,11 @@ def compose_discriminator_batch(source_features: torch.Tensor, target_features: 
     # concatenate source and target features
     source_features = torch.stack(source_features).sum(axis=0)
     target_features = torch.stack(target_features).sum(axis=0)
+    wandb.log({
+        'features_mean': source_features.mean(),
+        'features_max': source_features.max(),
+        'features_min': source_features.min(),
+    }, step=batches_done)
 
     # Combine source and target batches for discriminator
     features = torch.cat([source_features, target_features],axis=0).to(device)
@@ -178,8 +184,8 @@ def train(
     
 
     for epoch in range(1, epochs+1):
-        
         print("\n---- Training Model ----")
+        wandb.log({'epoch': epoch}, step=batches_done)
 
         # set to training mode
         model.train() # set yolo model to training mode
