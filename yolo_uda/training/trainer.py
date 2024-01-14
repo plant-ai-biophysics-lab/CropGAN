@@ -143,8 +143,7 @@ def compose_discriminator_batch(source_features: torch.Tensor, target_features: 
         'features_mean': source_features.mean(),
         'features_max': source_features.max(),
         'features_min': source_features.min(),
-
-    })
+    }, step=batches_done)
 
     # Combine source and target batches for discriminator
     features = torch.cat([source_features, target_features],axis=0).to(device)
@@ -186,7 +185,7 @@ def train(
 
     for epoch in range(1, epochs+1):
         print("\n---- Training Model ----")
-        wandb.log({'epoch': epoch})
+        wandb.log({'epoch': epoch}, step=batches_done)
 
         # set to training mode
         model.train() # set yolo model to training mode
