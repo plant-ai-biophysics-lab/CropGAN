@@ -115,7 +115,7 @@ def discriminator_step(
     
     return discriminator_loss, discriminator_acc
 
-def compose_discriminator_batch(batches_done: int, source_features: torch.Tensor, target_features: torch.Tensor,
+def compose_discriminator_batch(source_features: torch.Tensor, target_features: torch.Tensor,
                                 mini_batch_size: int, downsample_2: nn.Module, downsample_4: nn.Module,
                                 labels_source: torch.Tensor, labels_target: torch.Tensor,
                                 device: torch.device, shuffle: bool = True):
@@ -143,7 +143,7 @@ def compose_discriminator_batch(batches_done: int, source_features: torch.Tensor
         'features_mean': source_features.mean(),
         'features_max': source_features.max(),
         'features_min': source_features.min(),
-    }, step=batches_done)
+    }, commit=False)
 
     # Combine source and target batches for discriminator
     features = torch.cat([source_features, target_features],axis=0).to(device)
@@ -233,7 +233,6 @@ def train(
             yolo_loss, loss_components = compute_loss(source_outputs, targets, model)
             
             features, labels = compose_discriminator_batch(
-                batches_done=batches_done,
                 source_features=source_features, 
                 target_features=target_features, 
                 mini_batch_size=mini_batch_size, 

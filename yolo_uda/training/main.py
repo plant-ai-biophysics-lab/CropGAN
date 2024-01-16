@@ -47,7 +47,7 @@ def main(args, hyperparams, run):
     validation_dataloader = _create_validation_data_loader(
         os.path.dirname(args.val_path)+"/val.txt",
         batch_size=1,
-        img_size=model.hyperparams['height'],
+        img_size=hyperparams['img_size'],
         n_cpu=args.n_cpu
     )
     
