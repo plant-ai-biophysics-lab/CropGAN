@@ -143,7 +143,7 @@ def compose_discriminator_batch(source_features: torch.Tensor, target_features: 
         'features_mean': source_features.mean(),
         'features_max': source_features.max(),
         'features_min': source_features.min(),
-    }, step=batches_done)
+    }, commit=False)
 
     # Combine source and target batches for discriminator
     features = torch.cat([source_features, target_features],axis=0).to(device)
@@ -181,7 +181,7 @@ def train(
     # upsample_2 = Upsample(scale_factor=2, mode="nearest")
     downsample_2 = Upsample(scale_factor=0.5, mode="nearest")
     downsample_4 = Upsample(scale_factor=0.25, mode="nearest")
-    
+    batches_done = 0
 
     for epoch in range(1, epochs+1):
         print("\n---- Training Model ----")
@@ -214,8 +214,8 @@ def train(
             optimizer.zero_grad()
             optimizer_classifier.zero_grad()
 
-            batches_done = len(source_dataloader) * (epoch-1) + batch_i
-            
+            batches_done = len(target_dataloader) * (epoch-1) + batch_i
+
             # get imgs from data
             _, imgs_s, targets, labels_source = data_source
             _, imgs_t, _, labels_target = data_target
