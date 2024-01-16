@@ -122,6 +122,7 @@ def compose_discriminator_batch(source_features: torch.Tensor, target_features: 
     # source_features[0] = upsample_4(source_features[0])
     # source_features[1] = upsample_2(source_features[1])
     source_features[1] = downsample_2(source_features[1])
+
     # only used for yolov3.cfg, not yolov3-tiny.cfg
     if len(source_features) == 3:
         source_features[2] = downsample_4(source_features[2])
@@ -138,6 +139,11 @@ def compose_discriminator_batch(source_features: torch.Tensor, target_features: 
     # concatenate source and target features
     source_features = torch.stack(source_features).sum(axis=0)
     target_features = torch.stack(target_features).sum(axis=0)
+    wandb.log({
+        'features_mean': source_features.mean(),
+        'features_max': source_features.max(),
+        'features_min': source_features.min(),
+    }, commit=False)
 
     # Combine source and target batches for discriminator
     features = torch.cat([source_features, target_features],axis=0).to(device)
@@ -175,10 +181,11 @@ def train(
     # upsample_2 = Upsample(scale_factor=2, mode="nearest")
     downsample_2 = Upsample(scale_factor=0.5, mode="nearest")
     downsample_4 = Upsample(scale_factor=0.25, mode="nearest")
-    
+    batches_done = 0
+
     for epoch in range(1, epochs+1):
-        
         print("\n---- Training Model ----")
+        wandb.log({'epoch': epoch}, step=batches_done)
 
         # set to training mode
         model.train() # set yolo model to training mode
@@ -207,8 +214,8 @@ def train(
             optimizer.zero_grad()
             optimizer_classifier.zero_grad()
 
-            batches_done = len(source_dataloader) * (epoch-1) + batch_i
-            
+            batches_done = len(target_dataloader) * (epoch-1) + batch_i
+
             # get imgs from data
             _, imgs_s, targets, labels_source = data_source
             _, imgs_t, _, labels_target = data_target
@@ -253,7 +260,7 @@ def train(
                     if batches_done > threshold:
                         lr *= value
             # log the learning rate
-            wandb.log({"lr": lr})
+            wandb.log({"lr": lr}, step=batches_done)
             # set leraning rate
             for g in optimizer.param_groups:
                 g['lr'] = lr
@@ -295,17 +302,19 @@ def train(
                 "yolo_loss": float(loss_components[3]),
                 # "dscm_acc": float(discriminator_acc),
                 "dscm_loss": float(discriminator_loss)
-                })
+                },
+                step=batches_done)
             model.seen += imgs_s.size(0)
+
 
         # Training epoch metrics
         # Discriminator accuracy
-        wandb.log({"dscm_acc": discriminator_acc["total"]/discriminator_acc["batch_count"]})
+        wandb.log({"dscm_acc": discriminator_acc["total"]/discriminator_acc["batch_count"]}, step=batches_done)
         
         # Average cosine similarity within source, within target, and across source-target
         # For both feature layers
         for metric in [cosine_similarity_metrics_l15, cosine_similarity_metrics_l22, euclidean_distance_metrics_l15, euclidean_distance_metrics_l22]:
-            wandb.log(metric.return_metrics())
+            wandb.log(metric.return_metrics(), step=batches_done)
             metric.reset()
         
         # save model to checkpoint file
@@ -337,6 +346,7 @@ def train(
                     "recall": recall.mean(),
                     "f1": f1.mean(),
                     "mAP": AP.mean()
-                })
+                },
+                step=batches_done)
     
     return model

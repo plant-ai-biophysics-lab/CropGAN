@@ -47,7 +47,7 @@ def main(args, hyperparams, run):
     validation_dataloader = _create_validation_data_loader(
         os.path.dirname(args.val_path)+"/val.txt",
         batch_size=1,
-        img_size=model.hyperparams['height'],
+        img_size=hyperparams['img_size'],
         n_cpu=args.n_cpu
     )
     
@@ -64,8 +64,6 @@ def main(args, hyperparams, run):
         lr=hyperparams["learning_rate_disc"],
         weight_decay=hyperparams["decay_disc"]
     )
-
-    
 
     # train
     model = train(
@@ -89,7 +87,8 @@ def main(args, hyperparams, run):
     )
 
     # save model weights
-    save_dir = os.path.join(args.save, f"{datetime.today().strftime('%Y-%m-%d')}.pth")
+    save_name = f"ckpt_last_k={args.k}_alpha={args.alpha}_lambda={args.lambda_disc}_{datetime.today().strftime('%Y-%m-%d_%H-%M-%S')}.pth"
+    save_dir = os.path.join(args.save, save_name)
     torch.save(model.state_dict(), save_dir)
     best_model = wandb.Artifact(args.name, type="model")
     best_model.add_file(save_dir)
