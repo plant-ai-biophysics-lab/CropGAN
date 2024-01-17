@@ -316,14 +316,7 @@ def train(
         for metric in [cosine_similarity_metrics_l15, cosine_similarity_metrics_l22, euclidean_distance_metrics_l15, euclidean_distance_metrics_l22]:
             wandb.log(metric.return_metrics(), step=batches_done)
             metric.reset()
-        
-        # save model to checkpoint file
-        # TODO: Start saving checkpoints
-        # if epoch % args.checkpoint_interval == 0:
-        #     checkpoint_path = f"checkpoints/yolov3_ckpt_{epoch}.pth"
-        #     print(f"---- Saving checkpoint to: '{checkpoint_path}' ----")
-        #     torch.save(model.state_dict(), checkpoint_path)
-        
+                
         # evaluate
         if epoch % evaluate_interval == 0:
             print("\n---- Evaluating Model ----")

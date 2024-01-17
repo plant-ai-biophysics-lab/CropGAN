@@ -10,6 +10,7 @@ from torchvision import transforms
 from loader import prepare_data, _create_data_loader, _create_validation_data_loader
 from models import load_model, Discriminator, Upsample
 from trainer import train
+from validate import validate
 from datetime import datetime
 
 
@@ -65,35 +66,48 @@ def main(args, hyperparams, run):
         weight_decay=hyperparams["decay_disc"]
     )
 
-    # train
-    model = train(
-        model=model,
-        discriminator=discriminator,
-        source_dataloader=source_dataloader,
-        device=device,
-        optimizer=optimizer,
-        optimizer_classifier=optimizer_classifier,
-        mini_batch_size=mini_batch_size,
-        target_dataloader=target_dataloader,
-        validation_dataloader=validation_dataloader,
-        lambda_discriminator=args.lambda_disc,
-        verbose=args.verbose,
-        epochs=args.epochs,
-        evaluate_interval=args.eval_interval,
-        class_names=["0"],
-        iou_thresh=hyperparams["iou_thresh"],
-        conf_thresh=hyperparams["conf_thresh"],
-        nms_thresh=hyperparams["nms_thresh"]
-    )
+    if args.eval_only:
+        # validate
+        model = validate(
+            model = model,
+            device = device,
+            validation_dataloader = validation_dataloader,
+            class_names = ["0"],
+            iou_thresh=hyperparams["iou_thresh"],
+            conf_thresh=hyperparams["conf_thresh"],
+            nms_thresh=hyperparams["nms_thresh"]
+        )
+        
+    else:
+        # train
+        model = train(
+            model=model,
+            discriminator=discriminator,
+            source_dataloader=source_dataloader,
+            device=device,
+            optimizer=optimizer,
+            optimizer_classifier=optimizer_classifier,
+            mini_batch_size=mini_batch_size,
+            target_dataloader=target_dataloader,
+            validation_dataloader=validation_dataloader,
+            lambda_discriminator=args.lambda_disc,
+            verbose=args.verbose,
+            epochs=args.epochs,
+            evaluate_interval=args.eval_interval,
+            class_names=["0"],
+            iou_thresh=hyperparams["iou_thresh"],
+            conf_thresh=hyperparams["conf_thresh"],
+            nms_thresh=hyperparams["nms_thresh"]
+        )
 
-    # save model weights
-    save_name = f"ckpt_last_k={args.k}_alpha={args.alpha}_lambda={args.lambda_disc}_{datetime.today().strftime('%Y-%m-%d_%H-%M-%S')}.pth"
-    save_dir = os.path.join(args.save, save_name)
-    torch.save(model.state_dict(), save_dir)
-    best_model = wandb.Artifact(args.name, type="model")
-    best_model.add_file(save_dir)
-    # run.log_artifact(best_model)
-    # run.link_artifact(best_model, "model-registry/yolo-uda")
+        # save model weights
+        save_name = f"ckpt_last_k={args.k}_alpha={args.alpha}_lambda={args.lambda_disc}_{datetime.today().strftime('%Y-%m-%d_%H-%M-%S')}.pth"
+        save_dir = os.path.join(args.save, save_name)
+        torch.save(model.state_dict(), save_dir)
+        best_model = wandb.Artifact(args.name, type="model")
+        best_model.add_file(save_dir)
+        # run.log_artifact(best_model)
+        # run.link_artifact(best_model, "model-registry/yolo-uda")
     
 if __name__ == '__main__':
     ap = argparse.ArgumentParser()
@@ -123,6 +137,8 @@ if __name__ == '__main__':
                     help="Number of cpu threads")
     ap.add_argument("--eval_interval", type=int, default=1,
                     help="Evaluate model every eval_interval epochs")
+    ap.add_argument("--eval-only", action="store_true",
+                    help="Only runs validation with the provided model weights.")
     ap.add_argument("--verbose", action="store_true",
                     help="Prints training progress and results")
     ap.add_argument("-n", "--name", type=str, default="michael-test",
