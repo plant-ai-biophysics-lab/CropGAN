@@ -62,9 +62,27 @@ def create_modules(module_defs: List[dict]) -> Tuple[dict, nn.ModuleList]:
         'burn_in': int(hyperparams['burn_in']),
         'max_batches': int(hyperparams['max_batches']),
         'policy': hyperparams['policy'],
-        'lr_steps': list(zip(map(int,   hyperparams["steps"].split(",")),
-                             map(float, hyperparams["scales"].split(","))))
     })
+
+    # manually select which steps to decay the LR at (and by what value)
+    if "steps" in hyperparams and "scales" in hyperparams:
+        hyperparams.update({
+            'lr_steps': list(zip(map(int,   hyperparams["steps"].split(",")),
+                                 map(float, hyperparams["scales"].split(","))))
+        })
+
+    # decay by the value `lr_gamma` every N steps or every N epochs
+    elif "lr_gamma" in hyperparams and "lr_step" in hyperparams:
+        hyperparams.update({
+            'lr_step': int(hyperparams["lr_step"]),
+            'lr_gamma': float(hyperparams["lr_gamma"])
+        })
+    elif "lr_gamma" in hyperparams and "lr_epoch" in hyperparams:
+        hyperparams.update({
+            'lr_epoch': int(hyperparams["lr_epoch"]),
+            'lr_gamma': float(hyperparams["lr_gamma"])
+        })
+
     assert hyperparams["height"] == hyperparams["width"], \
         "Height and width should be equal! Non square images are padded with zeros."
     output_filters = [hyperparams["channels"]]
