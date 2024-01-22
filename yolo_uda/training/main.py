@@ -141,7 +141,7 @@ if __name__ == '__main__':
                     help="Only runs validation with the provided model weights.")
     ap.add_argument("--verbose", action="store_true",
                     help="Prints training progress and results")
-    ap.add_argument("-n", "--name", type=str, default="michael-test",
+    ap.add_argument("-n", "--name", type=str, default="DEFAULT-RUN-NAME-EMPTY",
                     help="Run name for wandb logging")
     ap.add_argument("-s", "--save", type=str, required=True,
                     help="Where to save model weights")

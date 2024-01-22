@@ -194,7 +194,7 @@ def train(
         # Collect discriminator accuracy over training batches
         # Note: total is the sum of batch-level accuracy, not sample-level accuracy. 
         # To get the average for the dataset, divide by the batch count.
-        discriminator_acc = {"total":0, "batch_count":0, "batch_size":mini_batch_size*2}
+        discriminator_acc = {"total": 0, "batch_count": 0, "batch_size": mini_batch_size*2}
         
         ## Feature map similarity metrics
         # Cosine similarity metrics
@@ -204,6 +204,9 @@ def train(
         # Euclidean distance metrics
         euclidean_distance_metrics_l15 = FeatureMapEuclideanDistance(layer="15")
         euclidean_distance_metrics_l22 = FeatureMapEuclideanDistance(layer="22")
+
+        # tracker
+        updated_lr_this_epoch = False
 
         for batch_i, contents in enumerate(
             tqdm.tqdm(zip(source_dataloader, target_dataloader), desc=f"Training Epoch {epoch}")
@@ -256,12 +259,33 @@ def train(
             if batches_done < model.hyperparams['burn_in']:
                 lr *= (batches_done / model.hyperparams['burn_in'])
             else:
-                for threshold, value in model.hyperparams['lr_steps']:
-                    if batches_done > threshold:
-                        lr *= value
+                # manually select which steps to decay the LR, and by what value
+                if 'lr_steps' in model.hyperparams:
+                    for threshold, value in model.hyperparams['lr_steps']:
+                        if batches_done > threshold:
+                            lr *= value
+
+                # decay every N steps or every N epochs
+                elif 'lr_gamma' in model.hyperparams:
+                    if 'lr_step' in model.hyperparams:
+                        if batches_done % model.hyperparams['lr_step'] == 0:
+                            print("Decaying learning rate ({}) by gamma {}".format(lr, model.hyperparams['lr_gamma'])
+                                  + " to {}".format(lr * model.hyperparams['lr_gamma']))
+                            lr = lr * model.hyperparams['lr_gamma']
+                            model.hyperparams['learning_rate'] = lr
+                    elif 'lr_epoch' in model.hyperparams:
+                        if epoch % model.hyperparams['lr_epoch'] == 0:
+                            if not updated_lr_this_epoch:
+                                updated_lr_this_epoch = True
+                                print("Decaying learning rate ({}) by gamma {}".format(lr, model.hyperparams['lr_gamma'])
+                                      + " to {}".format(lr * model.hyperparams['lr_gamma']))
+                                lr = lr * model.hyperparams['lr_gamma']
+                                model.hyperparams['learning_rate'] = lr
+
             # log the learning rate
             wandb.log({"lr": lr}, step=batches_done)
-            # set leraning rate
+
+            # set learning rate
             for g in optimizer.param_groups:
                 g['lr'] = lr
                 
