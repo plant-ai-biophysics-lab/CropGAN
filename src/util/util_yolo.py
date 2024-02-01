@@ -1,4 +1,7 @@
 from __future__ import division
+import os
+import sys
+sys.path.append(os.path.dirname(sys.path[0]))
 import math
 import time
 import tqdm
@@ -16,7 +19,6 @@ from torchvision import datasets
 from torchvision import transforms
 from torch.autograd import Variable
 import torch.optim as optim
-
 
 def resize(image, size):
     image = F.interpolate(image.unsqueeze(0), size=size, mode="nearest").squeeze(0)

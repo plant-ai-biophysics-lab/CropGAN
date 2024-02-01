@@ -30,7 +30,7 @@ def load_model(model_path, weights_path=None):
     """
     device = torch.device("cuda" if torch.cuda.is_available()
                           else "cpu")  # Select device for inference
-    model = GRLDarkNet(model_path).to(device)
+    model = GRLDarknet(model_path).to(device)
 
     model.apply(weights_init_normal)
 
@@ -208,7 +208,7 @@ class YOLOLayer(nn.Module):
         return torch.stack((xv, yv), 2).view((1, 1, ny, nx, 2)).float()
 
 
-class GRLDarkNet(Darknet):
+class GRLDarknet(Darknet):
     """YOLOv3 object detection model"""
 
     def __init__(self, config_path: str, img_size: int =416, use_tiny: bool = None):
@@ -216,7 +216,7 @@ class GRLDarkNet(Darknet):
         if use_tiny is None:
             use_tiny =  'tiny' in config_path
         self.use_tiny = use_tiny
-        super(GRLDarkNet, self).__init__(config_path=config_path)
+        super(GRLDarknet, self).__init__(config_path=config_path)
 
 
     def forward(self, x):
