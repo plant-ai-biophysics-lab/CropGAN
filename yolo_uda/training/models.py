@@ -9,11 +9,14 @@ from itertools import chain
 from typing import List, Tuple
 from torch import nn
 from pytorch_metric_learning.utils import common_functions as pml_cf
-from pytorchyolo.utils.parse_config import parse_model_config
+# from pytorchyolo.utils.parse_config import parse_model_config
 from pytorchyolo.utils.utils import weights_init_normal
 
 import wandb
 
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(sys.path[0])))
+from src.models.yolo_model import Darknet
 
 def load_model(model_path, weights_path=None):
     """Loads the yolo model from file.
@@ -41,121 +44,7 @@ def load_model(model_path, weights_path=None):
             model.load_darknet_weights(weights_path)
     return model
 
-def create_modules(module_defs: List[dict]) -> Tuple[dict, nn.ModuleList]:
-    """
-    Constructs module list of layer blocks from module configuration in module_defs
 
-    :param module_defs: List of dictionaries with module definitions
-    :return: Hyperparameters and pytorch module list
-    """
-    hyperparams = module_defs.pop(0)
-    hyperparams.update({
-        # 'batch': int(hyperparams['batch_size']),
-        # 'subdivisions': int(hyperparams['subdivisions']),
-        'width': int(hyperparams['width']),
-        'height': int(hyperparams['height']),
-        'channels': int(hyperparams['channels']),
-        'optimizer': hyperparams.get('optimizer'),
-        'momentum': float(hyperparams['momentum']),
-        'decay': float(hyperparams['decay']),
-        'learning_rate': float(hyperparams['learning_rate']),
-        'burn_in': int(hyperparams['burn_in']),
-        'max_batches': int(hyperparams['max_batches']),
-        'policy': hyperparams['policy'],
-    })
-
-    # manually select which steps to decay the LR at (and by what value)
-    if "steps" in hyperparams and "scales" in hyperparams:
-        hyperparams.update({
-            'lr_steps': list(zip(map(int,   hyperparams["steps"].split(",")),
-                                 map(float, hyperparams["scales"].split(","))))
-        })
-
-    # decay by the value `lr_gamma` every N steps or every N epochs
-    elif "lr_gamma" in hyperparams and "lr_step" in hyperparams:
-        hyperparams.update({
-            'lr_step': int(hyperparams["lr_step"]),
-            'lr_gamma': float(hyperparams["lr_gamma"])
-        })
-    elif "lr_gamma" in hyperparams and "lr_epoch" in hyperparams:
-        hyperparams.update({
-            'lr_epoch': int(hyperparams["lr_epoch"]),
-            'lr_gamma': float(hyperparams["lr_gamma"])
-        })
-
-    assert hyperparams["height"] == hyperparams["width"], \
-        "Height and width should be equal! Non square images are padded with zeros."
-    output_filters = [hyperparams["channels"]]
-    module_list = nn.ModuleList()
-    for module_i, module_def in enumerate(module_defs):
-        modules = nn.Sequential()
-
-        if module_def["type"] == "convolutional":
-            bn = int(module_def["batch_normalize"])
-            filters = int(module_def["filters"])
-            kernel_size = int(module_def["size"])
-            pad = (kernel_size - 1) // 2
-            modules.add_module(
-                f"conv_{module_i}",
-                nn.Conv2d(
-                    in_channels=output_filters[-1],
-                    out_channels=filters,
-                    kernel_size=kernel_size,
-                    stride=int(module_def["stride"]),
-                    padding=pad,
-                    bias=not bn,
-                ),
-            )
-            if bn:
-                modules.add_module(f"batch_norm_{module_i}",
-                                   nn.BatchNorm2d(filters, momentum=0.1, eps=1e-5))
-            if module_def["activation"] == "leaky":
-                modules.add_module(f"leaky_{module_i}", nn.LeakyReLU(0.1))
-            elif module_def["activation"] == "mish":
-                modules.add_module(f"mish_{module_i}", nn.Mish())
-            elif module_def["activation"] == "logistic":
-                modules.add_module(f"sigmoid_{module_i}", nn.Sigmoid())
-            elif module_def["activation"] == "swish":
-                modules.add_module(f"swish_{module_i}", nn.SiLU())
-
-        elif module_def["type"] == "maxpool":
-            kernel_size = int(module_def["size"])
-            stride = int(module_def["stride"])
-            if kernel_size == 2 and stride == 1:
-                modules.add_module(f"_debug_padding_{module_i}", nn.ZeroPad2d((0, 1, 0, 1)))
-            maxpool = nn.MaxPool2d(kernel_size=kernel_size, stride=stride,
-                                   padding=int((kernel_size - 1) // 2))
-            modules.add_module(f"maxpool_{module_i}", maxpool)
-
-        elif module_def["type"] == "upsample":
-            upsample = Upsample(scale_factor=int(module_def["stride"]), mode="nearest")
-            modules.add_module(f"upsample_{module_i}", upsample)
-
-        elif module_def["type"] == "route":
-            layers = [int(x) for x in module_def["layers"].split(",")]
-            filters = sum([output_filters[1:][i] for i in layers]) // int(module_def.get("groups", 1))
-            modules.add_module(f"route_{module_i}", nn.Sequential())
-
-        elif module_def["type"] == "shortcut":
-            filters = output_filters[1:][int(module_def["from"])]
-            modules.add_module(f"shortcut_{module_i}", nn.Sequential())
-
-        elif module_def["type"] == "yolo":
-            anchor_idxs = [int(x) for x in module_def["mask"].split(",")]
-            # Extract anchors
-            anchors = [int(x) for x in module_def["anchors"].split(",")]
-            anchors = [(anchors[i], anchors[i + 1]) for i in range(0, len(anchors), 2)]
-            anchors = [anchors[i] for i in anchor_idxs]
-            num_classes = int(module_def["classes"])
-            new_coords = bool(module_def.get("new_coords", False))
-            # Define detection layer
-            yolo_layer = YOLOLayer(anchors, num_classes, new_coords)
-            modules.add_module(f"yolo_{module_i}", yolo_layer)
-        # Register module list and number of output filters
-        module_list.append(modules)
-        output_filters.append(filters)
-
-    return hyperparams, module_list
 
 #####################
 ### Discriminator ###
@@ -269,6 +158,8 @@ class YOLOLayer(nn.Module):
         self.new_coords = new_coords
         self.mse_loss = nn.MSELoss()
         self.bce_loss = nn.BCELoss()
+        # Just to align with CropGAN's YOLOLayer
+        self.metrics = {}
         self.no = num_classes + 5  # number of outputs per anchor
         self.grid = torch.zeros(1)  # TODO
 
@@ -317,21 +208,16 @@ class YOLOLayer(nn.Module):
         return torch.stack((xv, yv), 2).view((1, 1, ny, nx, 2)).float()
 
 
-class Darknet(nn.Module):
+class GRLDarkNet(Darknet):
     """YOLOv3 object detection model"""
 
-    def __init__(self, config_path: str, use_tiny: bool = None):
-        super(Darknet, self).__init__()
+    def __init__(self, config_path: str, img_size: int =416, use_tiny: bool = None):
         # Need this for extracting feature_maps in forward()
         if use_tiny is None:
             use_tiny =  'tiny' in config_path
         self.use_tiny = use_tiny
-        self.module_defs = parse_model_config(config_path)
-        self.hyperparams, self.module_list = create_modules(self.module_defs)
-        self.yolo_layers = [layer[0]
-                            for layer in self.module_list if isinstance(layer[0], YOLOLayer)]
-        self.seen = 0
-        self.header_info = np.array([0, 0, 0, self.seen, 0], dtype=np.int32)
+        super(GRLDarkNet, self).__init__()
+
 
     def forward(self, x):
         feature_maps = [] # save feature maps for discriminator
@@ -358,96 +244,118 @@ class Darknet(nn.Module):
                 feature_maps.append(x)
         return [yolo_outputs, feature_maps] if self.training else torch.cat(yolo_outputs, 1)
 
-    def load_darknet_weights(self, weights_path):
-        """Parses and loads the weights stored in 'weights_path'"""
-
-        # Open the weights file
-        with open(weights_path, "rb") as f:
-            # First five are header values
-            header = np.fromfile(f, dtype=np.int32, count=5)
-            self.header_info = header  # Needed to write header when saving weights
-            self.seen = header[3]  # number of images seen during training
-            weights = np.fromfile(f, dtype=np.float32)  # The rest are weights
-
-        # Establish cutoff for loading backbone weights
-        cutoff = None
-        # If the weights file has a cutoff, we can find out about it by looking at the filename
-        # examples: darknet53.conv.74 -> cutoff is 74
-        filename = os.path.basename(weights_path)
-        if ".conv." in filename:
-            try:
-                cutoff = int(filename.split(".")[-1])  # use last part of filename
-            except ValueError:
-                pass
-
-        ptr = 0
-        for i, (module_def, module) in enumerate(zip(self.module_defs, self.module_list)):
-            if i == cutoff:
-                break
-            if module_def["type"] == "convolutional":
-                conv_layer = module[0]
-                if module_def["batch_normalize"]:
-                    # Load BN bias, weights, running mean and running variance
-                    bn_layer = module[1]
-                    num_b = bn_layer.bias.numel()  # Number of biases
-                    # Bias
-                    bn_b = torch.from_numpy(
-                        weights[ptr: ptr + num_b]).view_as(bn_layer.bias)
-                    bn_layer.bias.data.copy_(bn_b)
-                    ptr += num_b
-                    # Weight
-                    bn_w = torch.from_numpy(
-                        weights[ptr: ptr + num_b]).view_as(bn_layer.weight)
-                    bn_layer.weight.data.copy_(bn_w)
-                    ptr += num_b
-                    # Running Mean
-                    bn_rm = torch.from_numpy(
-                        weights[ptr: ptr + num_b]).view_as(bn_layer.running_mean)
-                    bn_layer.running_mean.data.copy_(bn_rm)
-                    ptr += num_b
-                    # Running Var
-                    bn_rv = torch.from_numpy(
-                        weights[ptr: ptr + num_b]).view_as(bn_layer.running_var)
-                    bn_layer.running_var.data.copy_(bn_rv)
-                    ptr += num_b
-                else:
-                    # Load conv. bias
-                    num_b = conv_layer.bias.numel()
-                    conv_b = torch.from_numpy(
-                        weights[ptr: ptr + num_b]).view_as(conv_layer.bias)
-                    conv_layer.bias.data.copy_(conv_b)
-                    ptr += num_b
-                # Load conv. weights
-                num_w = conv_layer.weight.numel()
-                conv_w = torch.from_numpy(
-                    weights[ptr: ptr + num_w]).view_as(conv_layer.weight)
-                conv_layer.weight.data.copy_(conv_w)
-                ptr += num_w
-
-    def save_darknet_weights(self, path, cutoff=-1):
+    def create_modules(self,module_defs: List[dict]) -> Tuple[dict, nn.ModuleList]:
         """
-            @:param path    - path of the new weights file
-            @:param cutoff  - save layers between 0 and cutoff (cutoff = -1 -> all are saved)
+        Constructs module list of layer blocks from module configuration in module_defs
+
+        :param module_defs: List of dictionaries with module definitions
+        :return: Hyperparameters and pytorch module list
         """
-        fp = open(path, "wb")
-        self.header_info[3] = self.seen
-        self.header_info.tofile(fp)
+        hyperparams = module_defs.pop(0)
+        hyperparams.update({
+            # 'batch': int(hyperparams['batch_size']),
+            # 'subdivisions': int(hyperparams['subdivisions']),
+            'width': int(hyperparams['width']),
+            'height': int(hyperparams['height']),
+            'channels': int(hyperparams['channels']),
+            'optimizer': hyperparams.get('optimizer'),
+            'momentum': float(hyperparams['momentum']),
+            'decay': float(hyperparams['decay']),
+            'learning_rate': float(hyperparams['learning_rate']),
+            'burn_in': int(hyperparams['burn_in']),
+            'max_batches': int(hyperparams['max_batches']),
+            'policy': hyperparams['policy'],
+        })
 
-        # Iterate through layers
-        for i, (module_def, module) in enumerate(zip(self.module_defs[:cutoff], self.module_list[:cutoff])):
+        # manually select which steps to decay the LR at (and by what value)
+        if "steps" in hyperparams and "scales" in hyperparams:
+            hyperparams.update({
+                'lr_steps': list(zip(map(int,   hyperparams["steps"].split(",")),
+                                    map(float, hyperparams["scales"].split(","))))
+            })
+
+        # decay by the value `lr_gamma` every N steps or every N epochs
+        elif "lr_gamma" in hyperparams and "lr_step" in hyperparams:
+            hyperparams.update({
+                'lr_step': int(hyperparams["lr_step"]),
+                'lr_gamma': float(hyperparams["lr_gamma"])
+            })
+        elif "lr_gamma" in hyperparams and "lr_epoch" in hyperparams:
+            hyperparams.update({
+                'lr_epoch': int(hyperparams["lr_epoch"]),
+                'lr_gamma': float(hyperparams["lr_gamma"])
+            })
+
+        assert hyperparams["height"] == hyperparams["width"], \
+            "Height and width should be equal! Non square images are padded with zeros."
+        output_filters = [hyperparams["channels"]]
+        module_list = nn.ModuleList()
+        for module_i, module_def in enumerate(module_defs):
+            modules = nn.Sequential()
+
             if module_def["type"] == "convolutional":
-                conv_layer = module[0]
-                # If batch norm, load bn first
-                if module_def["batch_normalize"]:
-                    bn_layer = module[1]
-                    bn_layer.bias.data.cpu().numpy().tofile(fp)
-                    bn_layer.weight.data.cpu().numpy().tofile(fp)
-                    bn_layer.running_mean.data.cpu().numpy().tofile(fp)
-                    bn_layer.running_var.data.cpu().numpy().tofile(fp)
-                # Load conv bias
-                else:
-                    conv_layer.bias.data.cpu().numpy().tofile(fp)
-                # Load conv weights
-                conv_layer.weight.data.cpu().numpy().tofile(fp)
+                bn = int(module_def["batch_normalize"])
+                filters = int(module_def["filters"])
+                kernel_size = int(module_def["size"])
+                pad = (kernel_size - 1) // 2
+                modules.add_module(
+                    f"conv_{module_i}",
+                    nn.Conv2d(
+                        in_channels=output_filters[-1],
+                        out_channels=filters,
+                        kernel_size=kernel_size,
+                        stride=int(module_def["stride"]),
+                        padding=pad,
+                        bias=not bn,
+                    ),
+                )
+                if bn:
+                    modules.add_module(f"batch_norm_{module_i}",
+                                    nn.BatchNorm2d(filters, momentum=0.1, eps=1e-5))
+                if module_def["activation"] == "leaky":
+                    modules.add_module(f"leaky_{module_i}", nn.LeakyReLU(0.1))
+                elif module_def["activation"] == "mish":
+                    modules.add_module(f"mish_{module_i}", nn.Mish())
+                elif module_def["activation"] == "logistic":
+                    modules.add_module(f"sigmoid_{module_i}", nn.Sigmoid())
+                elif module_def["activation"] == "swish":
+                    modules.add_module(f"swish_{module_i}", nn.SiLU())
 
-        fp.close()
+            elif module_def["type"] == "maxpool":
+                kernel_size = int(module_def["size"])
+                stride = int(module_def["stride"])
+                if kernel_size == 2 and stride == 1:
+                    modules.add_module(f"_debug_padding_{module_i}", nn.ZeroPad2d((0, 1, 0, 1)))
+                maxpool = nn.MaxPool2d(kernel_size=kernel_size, stride=stride,
+                                    padding=int((kernel_size - 1) // 2))
+                modules.add_module(f"maxpool_{module_i}", maxpool)
+
+            elif module_def["type"] == "upsample":
+                upsample = Upsample(scale_factor=int(module_def["stride"]), mode="nearest")
+                modules.add_module(f"upsample_{module_i}", upsample)
+
+            elif module_def["type"] == "route":
+                layers = [int(x) for x in module_def["layers"].split(",")]
+                filters = sum([output_filters[1:][i] for i in layers]) // int(module_def.get("groups", 1))
+                modules.add_module(f"route_{module_i}", nn.Sequential())
+
+            elif module_def["type"] == "shortcut":
+                filters = output_filters[1:][int(module_def["from"])]
+                modules.add_module(f"shortcut_{module_i}", nn.Sequential())
+
+            elif module_def["type"] == "yolo":
+                anchor_idxs = [int(x) for x in module_def["mask"].split(",")]
+                # Extract anchors
+                anchors = [int(x) for x in module_def["anchors"].split(",")]
+                anchors = [(anchors[i], anchors[i + 1]) for i in range(0, len(anchors), 2)]
+                anchors = [anchors[i] for i in anchor_idxs]
+                num_classes = int(module_def["classes"])
+                new_coords = bool(module_def.get("new_coords", False))
+                # Define detection layer
+                yolo_layer = YOLOLayer(anchors, num_classes, new_coords)
+                modules.add_module(f"yolo_{module_i}", yolo_layer)
+            # Register module list and number of output filters
+            module_list.append(modules)
+            output_filters.append(filters)
+
+        return hyperparams, module_list

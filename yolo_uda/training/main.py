@@ -57,13 +57,13 @@ def main(args, hyperparams, run):
     params_classifier = [p for p in discriminator.parameters() if p.requires_grad]
     optimizer = optim.Adam(
         params,
-        lr=model.hyperparams['learning_rate'],
-        weight_decay=model.hyperparams['decay']
+        lr=float(model.hyperparams['learning_rate']),
+        weight_decay=float(model.hyperparams['decay'])
     )
     optimizer_classifier = optim.Adam(
         params_classifier,
-        lr=hyperparams["learning_rate_disc"],
-        weight_decay=hyperparams["decay_disc"]
+        lr=float(hyperparams["learning_rate_disc"]),
+        weight_decay=float(hyperparams["decay_disc"])
     )
 
     if args.eval_only:
