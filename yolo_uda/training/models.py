@@ -30,7 +30,7 @@ def load_model(model_path, weights_path=None):
     """
     device = torch.device("cuda" if torch.cuda.is_available()
                           else "cpu")  # Select device for inference
-    model = Darknet(model_path).to(device)
+    model = GRLDarkNet(model_path).to(device)
 
     model.apply(weights_init_normal)
 
@@ -216,7 +216,7 @@ class GRLDarkNet(Darknet):
         if use_tiny is None:
             use_tiny =  'tiny' in config_path
         self.use_tiny = use_tiny
-        super(GRLDarkNet, self).__init__()
+        super(GRLDarkNet, self).__init__(config_path=config_path)
 
 
     def forward(self, x):
