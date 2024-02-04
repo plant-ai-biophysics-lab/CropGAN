@@ -9,6 +9,7 @@ from itertools import chain
 from typing import List, Tuple
 from torch import nn
 from pytorch_metric_learning.utils import common_functions as pml_cf
+from pytorchyolo.utils.loss import compute_loss
 # from pytorchyolo.utils.parse_config import parse_model_config
 from pytorchyolo.utils.utils import weights_init_normal
 
@@ -219,7 +220,7 @@ class GRLDarknet(Darknet):
         super(GRLDarknet, self).__init__(config_path=config_path,img_size=img_size)
 
 
-    def forward(self, x):
+    def forward(self, x, targets = None):
         feature_maps = [] # save feature maps for discriminator
         img_size = x.size(2)
         layer_outputs, yolo_outputs = [], []
@@ -242,7 +243,12 @@ class GRLDarknet(Darknet):
             layer_outputs.append(x)
             if i in feature_map_layers:
                 feature_maps.append(x)
-        return [yolo_outputs, feature_maps] if self.training else torch.cat(yolo_outputs, 1)
+        return [yolo_outputs, feature_maps] if self.training else 0, torch.cat(yolo_outputs, 1)
+        # if self.training:
+        #     return [yolo_outputs, feature_maps] 
+        # elif targets is not None: 
+        #     loss, loss_components = compute_loss(yolo_outputs, targets, self)
+        #     return loss, torch.cat(yolo_outputs, 1)
 
     def create_modules(self,module_defs: List[dict]) -> Tuple[dict, nn.ModuleList]:
         """
