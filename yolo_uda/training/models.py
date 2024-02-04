@@ -181,21 +181,24 @@ class YOLOLayer(nn.Module):
         self.stride = stride
         bs, _, ny, nx = x.shape  # x(bs,255,20,20) to x(bs,3,20,20,85)
         x = x.view(bs, self.num_anchors, self.no, ny, nx).permute(0, 1, 3, 4, 2).contiguous()
-
+        
         if not self.training:  # inference
-            if self.grid.shape[2:4] != x.shape[2:4]:
-                self.grid = self._make_grid(nx, ny).to(x.device)
+            pred = torch.clone(x)
+            if self.grid.shape[2:4] != pred.shape[2:4]:
+                self.grid = self._make_grid(nx, ny).to(pred.device)
 
             if self.new_coords:
-                x[..., 0:2] = (x[..., 0:2] + self.grid) * stride  # xy
-                x[..., 2:4] = x[..., 2:4] ** 2 * (4 * self.anchor_grid) # wh
+                pred[..., 0:2] = (pred[..., 0:2] + self.grid) * stride  # xy
+                pred[..., 2:4] = pred[..., 2:4] ** 2 * (4 * self.anchor_grid) # wh
             else:
-                x[..., 0:2] = (x[..., 0:2].sigmoid() + self.grid) * stride  # xy
-                x[..., 2:4] = torch.exp(x[..., 2:4]) * self.anchor_grid # wh
-                x[..., 4:] = x[..., 4:].sigmoid() # conf, cls
-            x = x.view(bs, -1, self.no)
-
-        return x
+                pred[..., 0:2] = (pred[..., 0:2].sigmoid() + self.grid) * stride  # xy
+                pred[..., 2:4] = torch.exp(pred[..., 2:4]) * self.anchor_grid # wh
+                pred[..., 4:] = pred[..., 4:].sigmoid() # conf, cls
+            pred = pred.view(bs, -1, self.no)
+        else:
+            pred = None
+        # We now return the original x during inference because CropGAN requires it.
+        return x, pred 
 
     @staticmethod
     def _make_grid(nx: int = 20, ny: int = 20) -> torch.Tensor:
@@ -238,17 +241,27 @@ class GRLDarknet(Darknet):
                 layer_i = int(module_def["from"])
                 x = layer_outputs[-1] + layer_outputs[layer_i]
             elif module_def["type"] == "yolo":
-                x = module[0](x, img_size)
-                yolo_outputs.append(x)
+                # x is now always the training yolo outputs, pred is the inference output
+                x, pred = module[0](x, img_size)
+                if self.training or targets is not None:
+                    yolo_outputs.append(x)
+                else:
+                    yolo_outputs.append(pred)
             layer_outputs.append(x)
             if i in feature_map_layers:
                 feature_maps.append(x)
-        return [yolo_outputs, feature_maps] if self.training else 0, torch.cat(yolo_outputs, 1)
-        # if self.training:
-        #     return [yolo_outputs, feature_maps] 
-        # elif targets is not None: 
-        #     loss, loss_components = compute_loss(yolo_outputs, targets, self)
-        #     return loss, torch.cat(yolo_outputs, 1)
+        if self.training:
+            # Training
+            return [yolo_outputs, feature_maps]
+        elif targets is not None:
+            # CropGAN, need to calculate the loss but not inference metrics 
+            if len(targets.shape) == 0:
+                targets = torch.empty([0,6])
+            loss, loss_components = compute_loss(yolo_outputs, targets,self)
+            return loss, yolo_outputs
+        else:
+            # Inference
+            return torch.cat(yolo_outputs, 1)
 
     def create_modules(self,module_defs: List[dict]) -> Tuple[dict, nn.ModuleList]:
         """
