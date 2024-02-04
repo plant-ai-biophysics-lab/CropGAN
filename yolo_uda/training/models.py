@@ -216,7 +216,7 @@ class GRLDarknet(Darknet):
         if use_tiny is None:
             use_tiny =  'tiny' in config_path
         self.use_tiny = use_tiny
-        super(GRLDarknet, self).__init__(config_path=config_path)
+        super(GRLDarknet, self).__init__(config_path=config_path,img_size=img_size)
 
 
     def forward(self, x):
