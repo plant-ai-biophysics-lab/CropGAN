@@ -255,10 +255,10 @@ class GRLDarknet(Darknet):
             return [yolo_outputs, feature_maps]
         elif targets is not None:
             # CropGAN, need to calculate the loss but not inference metrics 
-            if len(targets.shape) == 0:
+            if len(targets.shape) <= 1:
                 targets = torch.empty([0,6])
             loss, loss_components = compute_loss(yolo_outputs, targets,self)
-            return loss, yolo_outputs
+            return loss[0], yolo_outputs
         else:
             # Inference
             return torch.cat(yolo_outputs, 1)
