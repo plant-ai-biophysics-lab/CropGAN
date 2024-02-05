@@ -95,8 +95,12 @@ class DoubleTaskCycleGanModel(BaseModel):
         print("\nInitializing YOLO network ... ")
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print("YOLO Device: ", device)
-        self.netYoloA = GRLDarknet(opt.task_model_def, img_size=opt.yolo_img_size).to(device)
-        self.netYoloB = GRLDarknet(opt.task_model_def, img_size=opt.yolo_img_size).to(device)
+        if opt.use_grl:
+            self.netYoloA = GRLDarknet(opt.task_model_def, img_size=opt.yolo_img_size).to(device)
+            self.netYoloB = GRLDarknet(opt.task_model_def, img_size=opt.yolo_img_size).to(device)
+        else:
+            self.netYoloA = Darknet(opt.task_model_def, img_size=opt.yolo_img_size).to(device)
+            self.netYoloB = Darknet(opt.task_model_def, img_size=opt.yolo_img_size).to(device)
 
         # load yolo weights
         if opt.yolo_a_weights != '':
