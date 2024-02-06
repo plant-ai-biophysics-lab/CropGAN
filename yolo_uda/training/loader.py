@@ -8,7 +8,10 @@ from pytorchyolo.utils.utils import worker_seed_set
 
 from datasets import UDAListDataset
 
-def prepare_data(train_path, val_path, K=0):
+def prepare_data(train_path, val_path, K=0, skip_preparation=False):
+    if skip_preparation:
+        print("Skipping file preparation")
+        return
 
     # create list to store file paths
     paths = [val_path, train_path]

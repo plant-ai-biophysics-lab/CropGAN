@@ -19,7 +19,7 @@ def main(args, hyperparams, run):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
     # prepare data
-    prepare_data(args.train_path, args.val_path, args.k)
+    prepare_data(args.train_path, args.val_path, args.k, args.skip_preparation)
     
     # load models
     model = load_model(args.config, args.pretrained_weights).to(device)
@@ -145,8 +145,15 @@ if __name__ == '__main__':
                     help="Run name for wandb logging")
     ap.add_argument("-s", "--save", type=str, required=True,
                     help="Where to save model weights")
+    ap.add_argument("--skip-preparation", action="store_true", default=False,
+                    help="Whether to skip data preparation (use existing files)")
     args = ap.parse_args()
-    
+
+    if args.name == 'DEFAULT-RUN-NAME-EMPTY':
+        args.name = f"amogh-yolo-grl_k={args.k}_alpha={args.alpha}_lambda={args.lambda_disc}-farm-dataconsistent-feb6"
+        if args.alpha == 0 and args.lambda_disc == 0:
+            args.name = "BASELINE_" + args.name
+
     # hyperparams
     hyperparams = {
         "epochs": args.epochs,
@@ -168,3 +175,4 @@ if __name__ == '__main__':
     
     # start run
     main(args, hyperparams, run)
+
