@@ -4,6 +4,7 @@ from util.image_pool import ImagePool
 from .base_model import BaseModel
 from . import networks
 from models.yolo_model import Darknet
+from yolo_uda.training.models import GRLDarknet
 import os
 
 class DoubleTaskCycleGanModel(BaseModel):
@@ -94,8 +95,12 @@ class DoubleTaskCycleGanModel(BaseModel):
         print("\nInitializing YOLO network ... ")
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print("YOLO Device: ", device)
-        self.netYoloA = Darknet(opt.task_model_def, img_size=opt.yolo_img_size).to(device)
-        self.netYoloB = Darknet(opt.task_model_def, img_size=opt.yolo_img_size).to(device)
+        if opt.use_grl:
+            self.netYoloA = GRLDarknet(opt.task_model_def, img_size=opt.yolo_img_size).to(device)
+            self.netYoloB = GRLDarknet(opt.task_model_def, img_size=opt.yolo_img_size).to(device)
+        else:
+            self.netYoloA = Darknet(opt.task_model_def, img_size=opt.yolo_img_size).to(device)
+            self.netYoloB = Darknet(opt.task_model_def, img_size=opt.yolo_img_size).to(device)
 
         # load yolo weights
         if opt.yolo_a_weights != '':
@@ -223,12 +228,13 @@ class DoubleTaskCycleGanModel(BaseModel):
         else:
             self.fake_A = self.netG_B(self.real_B)  # G_B(B)
     
-    def load_network_yolo_b(self, epoch):
-        load_filename = '%s_net_yolo_b.pth' % epoch
-        load_path = os.path.join(self.save_dir, load_filename)
-        self.netYoloB.load_state_dict(torch.load(load_path))
-        print("load yolo weights: ", load_path)
-        self.netYoloB.eval()  # Set in evaluation mode
+    # MHS: Not in use
+    # def load_network_yolo_b(self, epoch):
+    #     load_filename = '%s_net_yolo_b.pth' % epoch
+    #     load_path = os.path.join(self.save_dir, load_filename)
+    #     self.netYoloB.load_state_dict(torch.load(load_path))
+    #     print("load yolo weights: ", load_path)
+    #     self.netYoloB.eval()  # Set in evaluation mode
 
 
     def backward_D_basic(self, netD, real, fake):
@@ -270,14 +276,15 @@ class DoubleTaskCycleGanModel(BaseModel):
             loss_D_B2 = self.backward_D_basic(self.netD_B, self.real_A, fake_labeled_A)
             self.loss_D_B += loss_D_B2
     
-    def backward_YOLO_B(self):
-        """Calculate YOLO B loss for Fake B and label A"""
-        if lambda_yolo_b > 0:
-            loss_yolo_b, self.bbox_outputs = self.netYoloA(self.fake_B*0.5+0.5, self.A_label) # de-normalize the image before feed into the yolo net
-            self.loss_yolo_b = lambda_yolo_b * loss_yolo_b
-        else:
-            self.loss_yolo_b = 0
-        return self.loss_yolo_b 
+    # MHS: Not in use
+    # def backward_YOLO_B(self):
+    #     """Calculate YOLO B loss for Fake B and label A"""
+    #     if lambda_yolo_b > 0:
+    #         loss_yolo_b, self.bbox_outputs = self.netYoloA(self.fake_B*0.5+0.5, self.A_label) # de-normalize the image before feed into the yolo net
+    #         self.loss_yolo_b = lambda_yolo_b * loss_yolo_b
+    #     else:
+    #         self.loss_yolo_b = 0
+    #     return self.loss_yolo_b 
 
     def backward_G(self):
         """Calculate the loss for generators G_A and G_B"""

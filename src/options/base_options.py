@@ -65,7 +65,9 @@ class BaseOptions():
         parser.add_argument('--yolo_valid_path', type=str, default='None', help='the location of trained yolo network definition')
         parser.add_argument('--yolo_batch_size', type=int, default=4, help='the batch size of yolo net train')
         parser.add_argument("--yolo_n_cpu", type=int, default=8, help="number of cpu threads to use during batch generation")
-
+        # GRL parameters
+        parser.add_argument("--use_grl", action="store_true",help="Use GRLDarkNet (which adds a gradient reversal layer) instead of DarkNet.")
+    
 
         self.initialized = True
         return parser
