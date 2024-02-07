@@ -80,8 +80,10 @@ class DoubleTaskCycleGanModel(BaseModel):
         # define networks (both Generators and discriminators)
         # The naming is different from those used in the paper.
         # Code (vs. paper): G_A (G), G_B (F), D_A (D_Y), D_B (D_X)
+        # netG_A: GAN that turns synthetic images into real images
         self.netG_A = networks.define_G(opt.input_nc, opt.output_nc, opt.ngf, opt.netG, opt.norm,
                                         not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids)
+        # netG_B: GAN that turns real images into synthetic images
         self.netG_B = networks.define_G(opt.output_nc, opt.input_nc, opt.ngf, opt.netG, opt.norm,
                                         not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids)
 
@@ -166,8 +168,8 @@ class DoubleTaskCycleGanModel(BaseModel):
         The option 'direction' can be used to swap domain A and domain B.
         """
         AtoB = self.opt.direction == 'AtoB'
-        self.real_A = input['A' if AtoB else 'B'].to(self.device)
-        self.real_B = input['B' if AtoB else 'A'].to(self.device)
+        self.real_A = input['A' if AtoB else 'B'].to(self.device) # actual synthetic images ('real' means didn't go thru GAN)
+        self.real_B = input['B' if AtoB else 'A'].to(self.device) # actual real images
         self.labeled_B = input['labeled_B'].to(self.device)
         self.image_paths = input['A_paths' if AtoB else 'B_paths']
         self.A_task = input['A_task'].to(self.device)
@@ -205,12 +207,12 @@ class DoubleTaskCycleGanModel(BaseModel):
 
     def forward(self):
         """Run forward pass; called by both functions <optimize_parameters> and <test>."""
-        self.fake_B = self.netG_A(self.real_A)  # G_A(A)
-        self.rec_A = self.netG_B(self.fake_B)   # G_B(G_A(A))
-        self.fake_A = self.netG_B(self.real_B)  # G_B(B)
-        self.rec_B = self.netG_A(self.fake_A)   # G_A(G_B(B))
-        self.fake_labeled_A = self.netG_B(self.labeled_B)  # G_B(B)
-        self.rec_labeled_B = self.netG_A(self.fake_labeled_A)   # G_A(G_B(B))
+        self.fake_B = self.netG_A(self.real_A)  # G_A(A) - synthetic images + GAN -> "real"-ish images
+        self.rec_A = self.netG_B(self.fake_B)   # G_B(G_A(A)) - synth -> real -> synth again
+        self.fake_A = self.netG_B(self.real_B)  # G_B(B) - real images + GAN -> "synthetic"-ish images
+        self.rec_B = self.netG_A(self.fake_A)   # G_A(G_B(B)) - real -> synth -> real again
+        self.fake_labeled_A = self.netG_B(self.labeled_B)  # G_B(B) - same as rec_B, but it's the real images with labels
+        self.rec_labeled_B = self.netG_A(self.fake_labeled_A)  # G_A(G_B(B)) - same as fake A, but it's the real images with labels
 
     def forward_fake_B(self, no_grad=False):
         """Generate fake B"""
@@ -227,14 +229,6 @@ class DoubleTaskCycleGanModel(BaseModel):
                 self.fake_A = self.netG_B(self.real_B)  # G_B(B)
         else:
             self.fake_A = self.netG_B(self.real_B)  # G_B(B)
-    
-    # MHS: Not in use
-    # def load_network_yolo_b(self, epoch):
-    #     load_filename = '%s_net_yolo_b.pth' % epoch
-    #     load_path = os.path.join(self.save_dir, load_filename)
-    #     self.netYoloB.load_state_dict(torch.load(load_path))
-    #     print("load yolo weights: ", load_path)
-    #     self.netYoloB.eval()  # Set in evaluation mode
 
 
     def backward_D_basic(self, netD, real, fake):
@@ -276,7 +270,7 @@ class DoubleTaskCycleGanModel(BaseModel):
             loss_D_B2 = self.backward_D_basic(self.netD_B, self.real_A, fake_labeled_A)
             self.loss_D_B += loss_D_B2
     
-    # MHS: Not in use
+    # MHS: Not in use - Not different enough from loss_yolo_b below
     # def backward_YOLO_B(self):
     #     """Calculate YOLO B loss for Fake B and label A"""
     #     if lambda_yolo_b > 0:
@@ -317,12 +311,14 @@ class DoubleTaskCycleGanModel(BaseModel):
         self.loss_cycle_B = self.criterionCycle(self.rec_B, self.real_B) * lambda_B
 
         # YOLO task loss
+        # loss_yolo_b: How well the model predicts on synth->real images
         if lambda_yolo_b > 0:
             loss_yolo_b, self.bbox_outputs = self.netYoloB(self.fake_B*0.5+0.5, self.A_label) # de-normalize the image before feed into the yolo net
             self.loss_yolo_b = lambda_yolo_b * loss_yolo_b
         else:
             self.loss_yolo_b = 0
 
+        # loss_yolo_a: How well the model predicts on real->synth images
         if lambda_yolo_a > 0:
             loss_yolo_a, self.bbox_outputs_a = self.netYoloA(self.fake_labeled_A*0.5+0.5, self.labeled_B_label) # de-normalize the image before feed into the yolo net
             self.loss_G_B2 = self.criterionGAN(self.netD_B(self.fake_labeled_A), True)

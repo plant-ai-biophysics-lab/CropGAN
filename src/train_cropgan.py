@@ -27,102 +27,7 @@ import shutil
 from torch.autograd import Variable
 
 
-def log_yolo(model):
-    # ----------------
-    #   Log progress
-    # ----------------
-    metrics = [
-        "grid_size",
-        "loss",
-        "x",
-        "y",
-        "w",
-        "h",
-        "conf",
-        "cls",
-        "cls_acc",
-        "recall50",
-        "recall75",
-        "precision",
-        "conf_obj",
-        "conf_noobj",
-    ]
-    log_str = "\n--------\n" 
-
-    metric_table = [["Metrics", *[f"YOLO Layer {i}" for i in range(len(model.netYolo.yolo_layers))]]]
-
-    # Log metrics at each YOLO layer
-    for i, metric in enumerate(metrics):
-        formats = {m: "%.6f" for m in metrics}
-        formats["grid_size"] = "%2d"
-        formats["cls_acc"] = "%.2f%%"
-        row_metrics = [formats[metric] % yolo.metrics.get(metric, 0) for yolo in model.netYolo.yolo_layers]
-        metric_table += [[metric, *row_metrics]]
-
-        # Tensorboard logging
-        tensorboard_log = []
-        for j, yolo in enumerate(model.netYolo.yolo_layers):
-            for name, metric in yolo.metrics.items():
-                if name != "grid_size":
-                    tensorboard_log += [(f"{name}_{j+1}", metric)]
-        tensorboard_log += [("loss", loss.item())]
-        # logger.list_of_scalars_summary(tensorboard_log, batches_done)
-
-    log_str += AsciiTable(metric_table).table
-    log_str += f"\nTotal loss {loss.item()}"
-
-    print(log_str)
-
-
-# def save_intermediate_images(opt, intermediate_yolo_folder, save_real_A=False, save_one_shot=True):
-#     # Create intermediate dataset
-#     evaL_opt = copy.copy(opt)
-#     evaL_opt.serial_batches = True
-#     intermediate_dataset = create_dataset(evaL_opt)
-#     image_folder = intermediate_yolo_folder + "/images/"
-#     label_folder = intermediate_yolo_folder + "/labels/"
-#     for folder in [intermediate_yolo_folder, image_folder, label_folder]:
-#         if not os.path.exists(folder):
-#             os.makedirs(folder)
-
-#     for i, data in enumerate(tqdm.tqdm(intermediate_dataset)):
-#         A_path = data['A_paths'][0]
-#         A_label_path = A_path.replace("train", "label").replace(".png", ".txt").replace(".jpg", ".txt")
-#         model.set_input(data)  # unpack data from data loader
-
-#         if not save_real_A:
-#             model.test()           # run inference
-#             save_img_path = intermediate_yolo_folder + "/images/fake_B_" + os.path.basename(A_path)
-#             save_label_path = intermediate_yolo_folder + "/labels/fake_B_" + os.path.basename(A_path).replace(".png", ".txt").replace(".jpg", ".txt")
-#             save_image_tensor(model.fake_B, save_img_path)
-#             shutil.copy(A_label_path, save_label_path)
-#         else:
-#             # copy real A data and labels
-#             save_img_path = intermediate_yolo_folder + "/images/real_A_" + os.path.basename(A_path)
-#             save_label_path = intermediate_yolo_folder + "/labels/real_A_" + os.path.basename(A_path).replace(".png", ".txt").replace(".jpg", ".txt")
-#             save_image_tensor(model.real_A, save_img_path)
-#             shutil.copy(A_label_path, save_label_path)
-
-#         if i >= len(intermediate_dataset.dataset.A_paths) -1:
-#             break
-
-#     # include the one shot training sample if needed
-#     if opt.yolo_one_shot_file is not 'None' and save_one_shot:
-#         print("\n Save one shot yolo training data")
-#         oneshot_img_path = opt.yolo_one_shot_file
-#         oneshot_label_path = oneshot_img_path.replace("images", "labels").replace(".png", ".txt").replace(".jpg", ".txt")
-#         oneshot_img_save = intermediate_yolo_folder + "/images/oneshot_" + os.path.basename(oneshot_img_path)
-#         oneshot_label_save = intermediate_yolo_folder + "/labels/oneshot_" + os.path.basename(oneshot_label_path)
-#         shutil.copy(oneshot_img_path, oneshot_img_save)
-#         shutil.copy(oneshot_label_path, oneshot_label_save)
-
-
-
-
-
 if __name__ == '__main__':
-    # TODO: Args to be added into option
-    yolo_gradient_accumulations = 2
     iou_thres=0.5
     conf_thres=0.5
     nms_thres = 0.5
@@ -141,13 +46,14 @@ if __name__ == '__main__':
     model.setup(opt)               # regular setup: load and print networks; create schedulers
     visualizer = Visualizer(opt)   # create a visualizer that display/save images and plots
     total_iters = 0                # the total number of training iterations
-    yolo_save_dir = os.path.join(opt.checkpoints_dir, opt.name)  # save all the checkpoints to save_dir
-    intermediate_yolo_folder = os.path.join(opt.checkpoints_dir, opt.name) + "/intermediate/" # the folder to save intermediate yolo training data
+    # yolo_save_dir = os.path.join(opt.checkpoints_dir, opt.name)  # save all the checkpoints to save_dir
+    # intermediate_yolo_folder = os.path.join(opt.checkpoints_dir, opt.name) + "/intermediate/" # the folder to save intermediate yolo training data
     plot_save_dir = os.path.join(opt.checkpoints_dir, opt.name) + "/plots/" 
     if not os.path.exists(plot_save_dir):
         os.makedirs(plot_save_dir)
 
-    model.save_yolo_networks("init")
+    # MHS: Don't need to resave the model since we aren't updating the weights.
+    # model.save_yolo_networks("init")
     # save_intermediate_images(opt, intermediate_yolo_folder, save_real_A=True)
 
     # dual step cycle gan related variables
