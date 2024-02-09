@@ -149,11 +149,6 @@ if __name__ == '__main__':
                     help="Whether to skip data preparation (use existing files)")
     args = ap.parse_args()
 
-    if args.name == 'DEFAULT-RUN-NAME-EMPTY':
-        args.name = f"amogh-yolo-grl_k={args.k}_alpha={args.alpha}_lambda={args.lambda_disc}-farm-dataconsistent-feb6"
-        if args.alpha == 0 and args.lambda_disc == 0:
-            args.name = "BASELINE_" + args.name
-
     # hyperparams
     hyperparams = {
         "epochs": args.epochs,
