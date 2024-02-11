@@ -67,6 +67,7 @@ class BaseOptions():
         parser.add_argument("--yolo_n_cpu", type=int, default=8, help="number of cpu threads to use during batch generation")
         # GRL parameters
         parser.add_argument("--use_grl", action="store_true",help="Use GRLDarkNet (which adds a gradient reversal layer) instead of DarkNet.")
+        parser.add_argument('--reverse_task_k', type=int, default=0, help='the number of labeled images from B to use during cyclegan training.')
     
 
         self.initialized = True
