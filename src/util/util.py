@@ -189,7 +189,7 @@ def plot_image_with_detections(img_tensor,
         fig, (ax) = plt.subplots(1, 1, figsize=figsize)
     if normalize:
         ax.imshow(img_tensor.detach().cpu().squeeze(
-            0).permute([1, 2, 0])*0.5+0.5)
+            0).permute([1, 2, 0]) * 0.5 + 0.5)
     else:
         ax.imshow(img_tensor.detach().cpu().squeeze(0).permute([1, 2, 0]))
 
@@ -201,7 +201,7 @@ def plot_image_with_detections(img_tensor,
             for detect in detections_bbox:
                 if detect is not None:
                     detect = detect.squeeze(0)
-                    x1, y1, x2, y2, conf, cls_conf, cls_pred = detect
+                    x1, y1, x2, y2, conf, cls_conf, cls_pred = list(detect.cpu().detach().numpy())
                     box_w = x2 - x1
                     box_h = y2 - y1
                     color = (1., 0., 0.)
@@ -366,8 +366,14 @@ def plot_analysis_double_task(model, data, figsize=[12, 12],
             model.real_A*0.5+0.5, model.A_label)
         detections_nms = util_yolo.non_max_suppression(
             bbox_outputs, conf_thres=conf_thres, nms_thres=nms_thres)
+        if hasattr(model.real_A, 'cpu'):
+            model_real_A = model.real_A.cpu()
+        if hasattr(model.A_label, 'cpu'):
+            model_A_label = model.A_label.cpu()
+        if hasattr(detections_nms, 'cpu'):
+            detections_nms = detections_nms.cpu()
         plot_image_with_detections(
-            model.real_A, detections_nms,  model.A_label,  ax=ax_grids[0][0])
+            model_real_A, detections_nms,  model_A_label,  ax=ax_grids[0][0])
 
         # Fake B
         # de-normalize the image before feed into the yolo net
