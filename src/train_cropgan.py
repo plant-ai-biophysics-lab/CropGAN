@@ -26,6 +26,8 @@ import tqdm
 import shutil
 from torch.autograd import Variable
 
+import wandb
+
 
 if __name__ == '__main__':
     iou_thres=0.5
@@ -52,6 +54,9 @@ if __name__ == '__main__':
     if not os.path.exists(plot_save_dir):
         os.makedirs(plot_save_dir)
 
+    # Initialize logging
+    wandb.init(project="cropgan-uda", name=opt.wandb_name, config=opt)
+
     # MHS: Don't need to resave the model since we aren't updating the weights.
     # model.save_yolo_networks("init")
     # save_intermediate_images(opt, intermediate_yolo_folder, save_real_A=True)
@@ -65,6 +70,11 @@ if __name__ == '__main__':
         epoch_iter = 0                  # the number of training iterations in current epoch, reset to 0 every epoch
         visualizer.reset()              # reset the visualizer: make sure it saves the results to HTML at least once every epoch
         model.update_learning_rate()    # update learning rates in the beginning of every epoch.
+        wandb.log({
+            'G_lr': model.optimizer_G.param_groups[0]['lr'],
+            'D_lr': model.optimizer_D.param_groups[0]['lr'],
+            'epoch': epoch,
+        })
 
         for i, data in enumerate(dataset):  # inner loop within one epoch
             # print('Cycle GAN optimization start')
@@ -90,6 +100,10 @@ if __name__ == '__main__':
                 save_path = plot_save_dir + "/epoch_%.3i_%.3i.jpg"%(epoch, total_iters)
                 plot_analysis_double_task(model, data, conf_thres=0.1, reverse=True, title="epoch_%.3i_%.3i.jpg"%(epoch, total_iters), save_name=save_path)
                 # print('Display end')
+
+            losses = model.get_current_losses()
+            for k, v in losses.items():
+                wandb.log({k: v})
 
             if total_iters % opt.print_freq == 0:    # print training losses and save logging information to the disk
                 # print('print loss start')

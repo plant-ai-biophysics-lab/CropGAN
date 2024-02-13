@@ -68,7 +68,9 @@ class BaseOptions():
         # GRL parameters
         parser.add_argument("--use_grl", action="store_true",help="Use GRLDarkNet (which adds a gradient reversal layer) instead of DarkNet.")
         parser.add_argument('--reverse_task_k', type=int, default=0, help='the number of labeled images from B to use during cyclegan training.')
-    
+        # Logging parameters
+        parser.add_argument("--wandb_name", type=str, default="default-cropgan-run", help="Name of the wandb run")
+
 
         self.initialized = True
         return parser
