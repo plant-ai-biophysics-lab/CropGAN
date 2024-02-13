@@ -11,6 +11,8 @@ import util.util_yolo as util_yolo
 import time
 import tqdm
 
+import wandb
+
 def tensor2im(input_image, imtype=np.uint8):
     """"Converts a Tensor array into a numpy image array.
 
@@ -429,8 +431,17 @@ def plot_analysis_double_task(model, data, figsize=[12, 12],
 
 
     if save_name is not None:
+        fig = plt.gcf()
         plt.savefig(save_name)
         plt.close(fig)
+
+    # log image in wandb
+    image = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
+    image = image.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+    wandb.log({
+        "visual_analysis": wandb.Image(image)
+    })
+
 
 
 # ------------------------------
