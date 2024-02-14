@@ -15,6 +15,10 @@ from datetime import datetime
 
 
 def main(args, hyperparams, run):
+
+    # initialize class names
+    class_names = [str(i) for i in range(args.num_classes)]
+
     # select device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
@@ -72,7 +76,7 @@ def main(args, hyperparams, run):
             model = model,
             device = device,
             validation_dataloader = validation_dataloader,
-            class_names = ["0"],
+            class_names = class_names,
             iou_thresh=hyperparams["iou_thresh"],
             conf_thresh=hyperparams["conf_thresh"],
             nms_thresh=hyperparams["nms_thresh"]
@@ -94,7 +98,7 @@ def main(args, hyperparams, run):
             verbose=args.verbose,
             epochs=args.epochs,
             evaluate_interval=args.eval_interval,
-            class_names=["0"],
+            class_names=class_names,
             iou_thresh=hyperparams["iou_thresh"],
             conf_thresh=hyperparams["conf_thresh"],
             nms_thresh=hyperparams["nms_thresh"]
@@ -147,6 +151,8 @@ if __name__ == '__main__':
                     help="Where to save model weights")
     ap.add_argument("--skip-preparation", action="store_true", default=False,
                     help="Whether to skip data preparation (use existing files)")
+    ap.add_argument("--num-classes", type=int, default=1,
+                    help="Number of classes in dataset")
     args = ap.parse_args()
 
     # hyperparams
