@@ -1,59 +1,30 @@
-import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.patches as patches
-import cv2 as cv
 import glob
 import sys
 import os
-import copy
-import argparse
-import random
-import tqdm
-import time
-from PIL import Image
-import shutil
-import subprocess
 from multiprocessing import Pool
 
+from PIL import Image
+import numpy as np
 import torch
-from torch.autograd import Variable
 
 # Import Crop GAN related libs
 gan_dir = os.path.abspath("../src/")
 sys.path.append(gan_dir)
-from options.image_gen_options import ImageGenOptions
-# from options.test_options import TestOptions
 
-from data import create_dataset
 from models import create_model
-import util.util_yolo as util_detector
-from models.yolo_model import Darknet
+from options.image_gen_options import ImageGenOptions
 import util.util as utils
-from util.dataset_yolo import ListDataset
 
 
-""" 1. Setup Model
-The most important args to be set are:  
---checkpoints_dir:  # Set to the location of model  
---name: # the folder name 
-"""
-
-
-              
-
+# Setup Model
 opt = ImageGenOptions().parse()
 
 model = create_model(opt)      # create a model given opt.model and other options
+# Load pretrained model weights
 model.setup(opt)               # regular setup: load and print networks; create schedulers
 model.eval()
-print("MODEL SETUP")
-## 2. Load pretrained model weights
 
-# load_suffix = "../data/models/adaptive_teacher/Synthetic2bordenNight_Yolo_adaptive_branch_102223/latest"
-# model.load_networks_from_folder(opt.cropgan_weights)
-
-print("WEIGHTS LOADED")
-## 3. Load an systhetic (Domain A) image you want to transfer
+# Load a synthetic (Domain A) image you want to transfer
 # Loop through all the synthetic images, generate realistic ones.
 def tensor_to_image(tensor):
     tensor = tensor*255
