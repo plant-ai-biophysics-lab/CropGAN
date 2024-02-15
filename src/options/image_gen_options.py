@@ -8,7 +8,6 @@ class ImageGenOptions(BaseOptions):
     """
     def initialize(self, parser):
         parser = BaseOptions.initialize(self, parser)
-        # parser.add_argument('--cropgan_weights', type=str, help='Path and prefix for CropGAN weights, passed to load_networks_from_folder().')
         parser.add_argument('--image_path', type=str, help='Where to read synthetic images.')
         parser.add_argument('--out_path', type=str, help='Where to write modified images.')
         parser.add_argument('--phase', type=str, default='gen', help='train, val, test, etc')        
