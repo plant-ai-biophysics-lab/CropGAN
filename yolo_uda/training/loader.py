@@ -25,7 +25,7 @@ def prepare_data(train_path, val_path, K=0, skip_preparation=False):
     # loop through the files in the directory
     for i in range(0,2):
         for filename in os.listdir(paths[i]):
-            if filename.endswith('.jpg'):
+            if filename.endswith('.jpg') or filename.endswith('.jpeg') or filename.endswith('.png'):
                 file_path = os.path.join(paths[i],filename)
                 if i == 0:
                     val_paths.append(file_path)
