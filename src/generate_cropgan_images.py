@@ -35,6 +35,7 @@ def tensor_to_image(tensor):
     return Image.fromarray(tensor)
 
 synth_images = glob.glob(opt.image_path + "*.jpg")
+print("image path: ",opt.image_path)
 print("Number of synth input images: ",len(synth_images))
 with torch.no_grad():
 
