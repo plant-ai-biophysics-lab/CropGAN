@@ -23,7 +23,7 @@ def main(args, hyperparams, run):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
     # prepare data
-    prepare_data(args.train_path, args.val_path, args.k, args.skip_preparation)
+    prepare_data(args.train_path, args.target_train_path, args.target_val_path, args.k, args.skip_preparation)
     
     # load models
     model = load_model(args.config, args.pretrained_weights).to(device)
@@ -42,7 +42,7 @@ def main(args, hyperparams, run):
         multiscale_training=False
     )
     target_dataloader = _create_data_loader(
-        os.path.dirname(args.val_path)+"/val.txt",
+        os.path.dirname(args.target_train_path)+"/target_train.txt",
         batch_size=hyperparams['batch_size'],
         img_size=hyperparams['img_size'],
         n_cpu=args.n_cpu,
@@ -50,7 +50,7 @@ def main(args, hyperparams, run):
     )
     
     validation_dataloader = _create_validation_data_loader(
-        os.path.dirname(args.val_path)+"/val.txt",
+        os.path.dirname(args.target_val_path)+"/target_val.txt",
         batch_size=1,
         img_size=hyperparams['img_size'],
         n_cpu=args.n_cpu
@@ -129,8 +129,10 @@ if __name__ == '__main__':
                     help="Number of samples per batch.")
     ap.add_argument("-t", "--train-path", required=True,
                     help="Path to file containing training images")
-    ap.add_argument("-v", "--val-path", required=True,
-                    help="Path to file containing validation images")
+    ap.add_argument("-tt", "--target-train-path", required=True,
+                    help="Path to file containing target validation images")
+    ap.add_argument("-tv", "--target-val-path", required=True,
+                    help="Path to file containing target validation images")
     ap.add_argument("-c", "--config", required=True,
                     help="YOLOv3 configuration file")
     ap.add_argument("-p", "--pretrained_weights",
