@@ -19,23 +19,23 @@ cd $WORKDIR
 
 
 cropgan_dir="/group/jmearlesgrp/scratch/mhstan"
-data_dir="/group/jmearlesgrp/intermediate_data/mhstan/yolo_grl_data/BordenNight/"
+data_dir="/group/jmearlesgrp/intermediate_data/mhstan/yolo_grl_data/BordenNight"
 task_model_def="$cropgan_dir/CropGAN/yolo_uda/configs/yolov3-tiny.cfg"
 
 # the epoch is either a number or latest, it will be used to pull cyclegan checkpoint filenames.
 epoch="latest"
 
 # Same as the training images for training yolo-uda: something like BordenNight/source/train/images
-image_path="$data_dir/yolo_grl_data/BordenNight/source/train/images/"
+image_path="$data_dir/source/train/images/"
+
+# Inside of checkpoints_dir, this is the specific directory for the run you want to use
+run_name="BASELINE_k_4"
 
 # Where you want the CropGAN generated images to go
 out_path="$data_dir/cropgan_modified_images/$run_name/$epoch/"
 
 # Where your cyclegan checkpoints are stored (note: run_name is a sub-directory of checkpoints_dir)
 checkpoints_dir="$cropgan_dir/model_checkpoints/cyclegan/"
-
-# Inside of checkpoints_dir, this is the specific directory for the run you want to use
-run_name="BASELINE_k_4"
 
 
 python -u generate_cropgan_images.py \
