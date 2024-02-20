@@ -26,7 +26,7 @@ task_model_def="$cropgan_dir/CropGAN/yolo_uda/configs/yolov3-tiny.cfg"
 epoch="latest"
 
 # Same as the training images for training yolo-uda: something like BordenNight/source/train/images
-image_path="$data_dir/yolo_grl_data/BordenNight/source/train/images"
+image_path="$data_dir/yolo_grl_data/BordenNight/source/train/images/"
 
 # Where you want the CropGAN generated images to go
 out_path="$data_dir/cropgan_modified_images/$run_name/$epoch/"
