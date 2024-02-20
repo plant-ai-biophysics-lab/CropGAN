@@ -130,7 +130,7 @@ if __name__ == '__main__':
     ap.add_argument("-t", "--train-path", required=True,
                     help="Path to file containing training images")
     ap.add_argument("-tt", "--target-train-path", required=True,
-                    help="Path to file containing target validation images")
+                    help="Path to file containing target training images")
     ap.add_argument("-tv", "--target-val-path", required=True,
                     help="Path to file containing target validation images")
     ap.add_argument("-c", "--config", required=True,
