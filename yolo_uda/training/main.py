@@ -104,13 +104,11 @@ def main(args, hyperparams, run):
             lambda_discriminator=args.lambda_disc,
             verbose=args.verbose,
             epochs=args.epochs,
-            evaluate_interval=args.eval_interval,            
             save_dir=save_dir,
             class_names=class_names,
             iou_thresh=hyperparams["iou_thresh"],
             conf_thresh=hyperparams["conf_thresh"],
-            nms_thresh=hyperparams["nms_thresh"],
-            k=args.k
+            nms_thresh=hyperparams["nms_thresh"]
         )
 
         # save model weights

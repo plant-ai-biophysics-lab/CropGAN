@@ -176,12 +176,10 @@ def train(
     lambda_discriminator: float = 0.5,
     verbose: bool = False,
     epochs: int = 10,
-    evaluate_interval: int = 1,
     class_names: list = None,
     iou_thresh: float = 0.5,
     conf_thresh: float = 0.5,
     nms_thresh: float = 0.5,
-    k: float = 0,
 ):
     # upsample_4 = Upsample(scale_factor=4, mode="nearest")
     # upsample_2 = Upsample(scale_factor=2, mode="nearest")
