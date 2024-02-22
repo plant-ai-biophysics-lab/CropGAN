@@ -86,8 +86,9 @@ def main(args, hyperparams, run):
         
     else:
         # train
-        save_folder = f"k={args.k}_alpha={args.alpha}_lambda={args.lambda_disc}" 
-        save_dir = os.path.join(args.save,save_folder)
+        save_folder = f"k-{args.k}_alpha-{args.alpha}_lambda-{args.lambda_disc}"
+        save_dir = os.path.join(args.save, save_folder)
+        
         pathlib.Path(save_dir).mkdir(parents=True, exist_ok=True) 
         
         model = train(
