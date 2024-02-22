@@ -1,12 +1,14 @@
 import argparse
 import wandb
 import os
+import pathlib
+
 import torch
 import torch.optim as optim
-
 from PIL import Image
 from torchvision import transforms
 # from pytorchyolo.test import _create_validation_data_loader
+
 from loader import prepare_data, _create_data_loader, _create_validation_data_loader
 from models import load_model, Discriminator, Upsample
 from trainer import train
@@ -84,6 +86,11 @@ def main(args, hyperparams, run):
         
     else:
         # train
+        save_folder = f"k={args.k}_alpha={args.alpha}_lambda={args.lambda_disc}" 
+        save_dir = os.path.join(args.save,save_folder)
+        
+        pathlib.Path(save_dir).mkdir(parents=True, exist_ok=True) 
+        
         model = train(
             model=model,
             discriminator=discriminator,
@@ -97,17 +104,17 @@ def main(args, hyperparams, run):
             lambda_discriminator=args.lambda_disc,
             verbose=args.verbose,
             epochs=args.epochs,
-            evaluate_interval=args.eval_interval,
+            evaluate_interval=args.eval_interval,            
+            save_dir=save_dir,
             class_names=class_names,
             iou_thresh=hyperparams["iou_thresh"],
             conf_thresh=hyperparams["conf_thresh"],
             nms_thresh=hyperparams["nms_thresh"]
         )
-
         # save model weights
-        save_name = f"ckpt_last_k={args.k}_alpha={args.alpha}_lambda={args.lambda_disc}_{datetime.today().strftime('%Y-%m-%d_%H-%M-%S')}.pth"
-        save_dir = os.path.join(args.save, save_name)
-        torch.save(model.state_dict(), save_dir)
+        save_name = f"ckpt_last_{datetime.today().strftime('%Y-%m-%d_%H-%M-%S')}.pth"
+        save_filepath = os.path.join(save_dir, save_name)
+        torch.save(model.state_dict(), save_filepath)
         best_model = wandb.Artifact(args.name, type="model")
         best_model.add_file(save_dir)
         # run.log_artifact(best_model)
@@ -141,7 +148,7 @@ if __name__ == '__main__':
                     help="Number of training epochs")
     ap.add_argument("--n-cpu", type=int, default=6,
                     help="Number of cpu threads")
-    ap.add_argument("--eval_interval", type=int, default=1,
+    ap.add_argument("--eval_interval", type=int, default=50,
                     help="Evaluate model every eval_interval epochs")
     ap.add_argument("--eval-only", action="store_true",
                     help="Only runs validation with the provided model weights.")

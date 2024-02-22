@@ -8,10 +8,30 @@ from pytorchyolo.utils.utils import worker_seed_set
 
 from datasets import UDAListDataset
 
+K_VAL_MAP = {
+    1:1,
+    4:1,
+    8:1,
+    12:2,
+    16:3,
+    24:6,
+    32:8,
+    40:10,
+    98:28,
+    58:15
+}
+
 def prepare_data(train_path, target_train_path, target_val_path, K=0, skip_preparation=False):
     if skip_preparation:
         print("Skipping file preparation")
         return
+
+    # K_val is determined by k per CropGAN paper.   
+    if K in K_VAL_MAP:
+        K_val = K_VAL_MAP[K]
+    else:
+        # For Gemini if we use a different k value than in paper.
+        K_val = max(1,int(0.25*K))
 
     # create list to store file paths
     paths = [target_train_path, target_val_path, train_path]
@@ -32,7 +52,7 @@ def prepare_data(train_path, target_train_path, target_val_path, K=0, skip_prepa
                 if i == 0:
                     target_train_paths.append(file_path)
                     sample_loc_target_train.append(1)
-                elif i == 1:
+                elif i == 1 and len(target_val_paths) < K_val:
                     target_val_paths.append(file_path)
                     sample_loc_target_val.append(1)
                 else:
@@ -50,7 +70,7 @@ def prepare_data(train_path, target_train_path, target_val_path, K=0, skip_prepa
     train_output = os.path.join(os.path.dirname(train_path), 'train.txt')
     target_train_output = os.path.join(os.path.dirname(target_train_path), 'target_train.txt')
     target_val_output = os.path.join(os.path.dirname(target_val_path), 'target_val.txt')
-
+    
     for fname, sample_locs, paths in zip(
             [train_output, target_train_output, target_val_output],
             [sample_loc_train, sample_loc_target_train, sample_loc_target_val],

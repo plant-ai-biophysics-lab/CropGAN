@@ -1,8 +1,10 @@
+import os
+from datetime import datetime
+
 import torch
 import tqdm
 import wandb
 import numpy as np
-
 from torch import nn
 import torch.nn.functional as F
 from terminaltables import AsciiTable
@@ -168,6 +170,7 @@ def train(
     mini_batch_size: int,
     target_dataloader: DataLoader,
     validation_dataloader: DataLoader,
+    save_dir: str,
     lambda_discriminator: float = 0.5,
     verbose: bool = False,
     epochs: int = 10,
@@ -365,5 +368,12 @@ def train(
                     "mAP": AP.mean()
                 },
                 step=batches_done)
+            
+            # Save checkpoint
+            # save model weights
+            save_name = f"ckpt_epoch_{epoch}_{datetime.today().strftime('%Y-%m-%d_%H-%M-%S')}.pth"
+            save_filepath = os.path.join(save_dir, save_name)
+            torch.save(model.state_dict(), save_filepath)
+            
     
     return model
