@@ -2,7 +2,6 @@ import argparse
 import wandb
 import os
 import pathlib
-import yaml
 
 import torch
 import torch.optim as optim
@@ -112,13 +111,11 @@ def main(args, hyperparams, run):
             nms_thresh=hyperparams["nms_thresh"]
         )
         # save k values to file and other logs
-        logs = {
-            "K": k_paths
-        }
-        logs_file = os.path.join(save_dir, "logs.yaml")
+        logs_file = os.path.join(save_dir, f"k_{args.k}.txt")
         print(f'Printing log files to {logs_file}')
         with open(logs_file, 'w') as file:
-            yaml.dump(logs, file)
+            for path in k_paths:
+                file.write(str(path) + '\n')
             
         # save model weights
         save_name = f"ckpt_last_{datetime.today().strftime('%Y-%m-%d_%H-%M-%S')}.pth"
