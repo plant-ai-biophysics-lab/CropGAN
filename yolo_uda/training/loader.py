@@ -79,6 +79,8 @@ def prepare_data(train_path, target_train_path, target_val_path, K=0, skip_prepa
             for path, loc in zip(paths, sample_locs):
                 file.write(path + ' ' + str(loc) + '\n')
         print(f"File paths have been saved to {fname}")
+        
+    return examples
 
         
 def _create_data_loader(img_path, batch_size, img_size, n_cpu, multiscale_training=False):

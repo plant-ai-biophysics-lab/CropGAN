@@ -2,6 +2,7 @@ import argparse
 import wandb
 import os
 import pathlib
+import yaml
 
 import torch
 import torch.optim as optim
@@ -17,7 +18,7 @@ from datetime import datetime
 
 
 def main(args, hyperparams, run):
-
+    
     # initialize class names
     class_names = [str(i) for i in range(args.num_classes)]
 
@@ -25,7 +26,7 @@ def main(args, hyperparams, run):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
     # prepare data
-    prepare_data(args.train_path, args.target_train_path, args.target_val_path, args.k, args.skip_preparation)
+    k_paths = prepare_data(args.train_path, args.target_train_path, args.target_val_path, args.k, args.skip_preparation)
     
     # load models
     model = load_model(args.config, args.pretrained_weights).to(device)
@@ -88,7 +89,6 @@ def main(args, hyperparams, run):
         # train
         save_folder = f"k={args.k}_alpha={args.alpha}_lambda={args.lambda_disc}" 
         save_dir = os.path.join(args.save,save_folder)
-        
         pathlib.Path(save_dir).mkdir(parents=True, exist_ok=True) 
         
         model = train(
@@ -111,12 +111,21 @@ def main(args, hyperparams, run):
             conf_thresh=hyperparams["conf_thresh"],
             nms_thresh=hyperparams["nms_thresh"]
         )
+        # save k values to file and other logs
+        logs = {
+            "K": k_paths
+        }
+        logs_file = os.path.join(save_dir, "logs.yaml")
+        print(f'Printing log files to {logs_file}')
+        with open(logs_file, 'w') as file:
+            yaml.dump(logs, file)
+            
         # save model weights
         save_name = f"ckpt_last_{datetime.today().strftime('%Y-%m-%d_%H-%M-%S')}.pth"
         save_filepath = os.path.join(save_dir, save_name)
         torch.save(model.state_dict(), save_filepath)
         best_model = wandb.Artifact(args.name, type="model")
-        best_model.add_file(save_dir)
+        best_model.add_file(save_filepath)
         # run.log_artifact(best_model)
         # run.link_artifact(best_model, "model-registry/yolo-uda")
     
