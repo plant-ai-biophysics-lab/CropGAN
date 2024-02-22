@@ -17,7 +17,7 @@ from datetime import datetime
 
 
 def main(args, hyperparams, run):
-
+    
     # initialize class names
     class_names = [str(i) for i in range(args.num_classes)]
 
@@ -35,9 +35,9 @@ def main(args, hyperparams, run):
     # create dataloaders
     # mini_batch_size = model.hyperparams['batch'] // model.hyperparams['subdivisions']
     mini_batch_size = hyperparams['batch_size']
-
+    
     source_dataloader = _create_data_loader(
-        os.path.dirname(args.train_path)+"/train.txt",
+        os.path.dirname(args.train_path)+f"/train_k_{args.k}.txt",
         batch_size=hyperparams['batch_size'],
         img_size=hyperparams['img_size'],
         n_cpu=args.n_cpu,
@@ -52,7 +52,7 @@ def main(args, hyperparams, run):
     )
     
     validation_dataloader = _create_validation_data_loader(
-        os.path.dirname(args.target_val_path)+"/target_val.txt",
+        os.path.dirname(args.target_val_path)+f"/target_val_k_{args.k}.txt",
         batch_size=1,
         img_size=hyperparams['img_size'],
         n_cpu=args.n_cpu
@@ -110,13 +110,12 @@ def main(args, hyperparams, run):
             conf_thresh=hyperparams["conf_thresh"],
             nms_thresh=hyperparams["nms_thresh"]
         )
-
         # save model weights
         save_name = f"ckpt_last_{datetime.today().strftime('%Y-%m-%d_%H-%M-%S')}.pth"
         save_filepath = os.path.join(save_dir, save_name)
         torch.save(model.state_dict(), save_filepath)
         best_model = wandb.Artifact(args.name, type="model")
-        best_model.add_file(save_dir)
+        best_model.add_file(save_filepath)
         # run.log_artifact(best_model)
         # run.link_artifact(best_model, "model-registry/yolo-uda")
     

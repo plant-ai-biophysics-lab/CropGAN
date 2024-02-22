@@ -66,19 +66,20 @@ def prepare_data(train_path, target_train_path, target_val_path, K=0, skip_prepa
         train_paths += examples
         sample_loc_train += [1] * K
 
-    # write to txt file
-    train_output = os.path.join(os.path.dirname(train_path), 'train.txt')
+    # write to txt file if doesn't exist
+    train_output = os.path.join(os.path.dirname(train_path), f'train_k_{K}.txt')
     target_train_output = os.path.join(os.path.dirname(target_train_path), 'target_train.txt')
-    target_val_output = os.path.join(os.path.dirname(target_val_path), 'target_val.txt')
+    target_val_output = os.path.join(os.path.dirname(target_val_path), f'target_val_k_{K}.txt')
     
     for fname, sample_locs, paths in zip(
             [train_output, target_train_output, target_val_output],
             [sample_loc_train, sample_loc_target_train, sample_loc_target_val],
             [train_paths, target_train_paths, target_val_paths]):
-        with open(fname, 'w') as file:
-            for path, loc in zip(paths, sample_locs):
-                file.write(path + ' ' + str(loc) + '\n')
-        print(f"File paths have been saved to {fname}")
+        if not os.path.exists(fname):
+            with open(fname, 'w') as file:
+                for path, loc in zip(paths, sample_locs):
+                    file.write(path + ' ' + str(loc) + '\n')
+            print(f"File paths have been saved to {fname}")
 
         
 def _create_data_loader(img_path, batch_size, img_size, n_cpu, multiscale_training=False):
