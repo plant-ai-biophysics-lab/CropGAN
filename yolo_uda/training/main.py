@@ -25,7 +25,7 @@ def main(args, hyperparams, run):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
     # prepare data
-    k_paths = prepare_data(args.train_path, args.target_train_path, args.target_val_path, args.k, args.skip_preparation)
+    prepare_data(args.train_path, args.target_train_path, args.target_val_path, args.k, args.skip_preparation)
     
     # load models
     model = load_model(args.config, args.pretrained_weights).to(device)
@@ -37,7 +37,7 @@ def main(args, hyperparams, run):
     mini_batch_size = hyperparams['batch_size']
     
     source_dataloader = _create_data_loader(
-        os.path.dirname(args.train_path)+"/train.txt",
+        os.path.dirname(args.train_path)+f"/train_k_{args.k}.txt",
         batch_size=hyperparams['batch_size'],
         img_size=hyperparams['img_size'],
         n_cpu=args.n_cpu,
@@ -52,7 +52,7 @@ def main(args, hyperparams, run):
     )
     
     validation_dataloader = _create_validation_data_loader(
-        os.path.dirname(args.target_val_path)+"/target_val.txt",
+        os.path.dirname(args.target_val_path)+f"/target_val_k_{args.k}.txt",
         batch_size=1,
         img_size=hyperparams['img_size'],
         n_cpu=args.n_cpu
@@ -104,20 +104,12 @@ def main(args, hyperparams, run):
             lambda_discriminator=args.lambda_disc,
             verbose=args.verbose,
             epochs=args.epochs,
-            evaluate_interval=args.eval_interval,            
             save_dir=save_dir,
             class_names=class_names,
             iou_thresh=hyperparams["iou_thresh"],
             conf_thresh=hyperparams["conf_thresh"],
             nms_thresh=hyperparams["nms_thresh"]
         )
-        # save k values to file and other logs
-        logs_file = os.path.join(save_dir, f"k_{args.k}.txt")
-        print(f'Printing log files to {logs_file}')
-        with open(logs_file, 'w') as file:
-            for path in k_paths:
-                file.write(str(path) + '\n')
-            
         # save model weights
         save_name = f"ckpt_last_{datetime.today().strftime('%Y-%m-%d_%H-%M-%S')}.pth"
         save_filepath = os.path.join(save_dir, save_name)
