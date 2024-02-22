@@ -35,7 +35,7 @@ def main(args, hyperparams, run):
     # create dataloaders
     # mini_batch_size = model.hyperparams['batch'] // model.hyperparams['subdivisions']
     mini_batch_size = hyperparams['batch_size']
-    
+
     source_dataloader = _create_data_loader(
         os.path.dirname(args.train_path)+"/train.txt",
         batch_size=hyperparams['batch_size'],
@@ -86,8 +86,8 @@ def main(args, hyperparams, run):
         
     else:
         # train
-        save_folder = f"k={args.k}_alpha={args.alpha}_lambda={args.lambda_disc}" 
-        save_dir = os.path.join(args.save,save_folder)
+        save_folder = f"k-{args.k}_alpha-{args.alpha}_lambda-{args.lambda_disc}"
+        save_dir = os.path.join(args.save, save_folder)
         
         pathlib.Path(save_dir).mkdir(parents=True, exist_ok=True) 
         
@@ -109,8 +109,10 @@ def main(args, hyperparams, run):
             class_names=class_names,
             iou_thresh=hyperparams["iou_thresh"],
             conf_thresh=hyperparams["conf_thresh"],
-            nms_thresh=hyperparams["nms_thresh"]
+            nms_thresh=hyperparams["nms_thresh"],
+            k=args.k
         )
+
         # save model weights
         save_name = f"ckpt_last_{datetime.today().strftime('%Y-%m-%d_%H-%M-%S')}.pth"
         save_filepath = os.path.join(save_dir, save_name)
@@ -180,7 +182,7 @@ if __name__ == '__main__':
     }
 
     # initialize wandb
-    run = wandb.init(project='yolo-uda', name=args.name)
+    run = wandb.init(project='yolo-uda-final', name=args.name)
     wandb.config.update(hyperparams)
     
     # start run
