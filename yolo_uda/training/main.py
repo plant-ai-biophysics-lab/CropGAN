@@ -123,7 +123,7 @@ if __name__ == '__main__':
     ap = argparse.ArgumentParser()
     ap.add_argument("-k", type=int, default=0,
                     help="Number of target examples to add to training set")
-    ap.add_argument("-a", "--alpha", type=float, required=True,
+    ap.add_argument("-a", "--alpha", type=float, default=0.0,
                     help="Constant for gradient reversal layer")
     ap.add_argument("-l", "--lambda-disc", type=float, default=0.5,
                     help="Weighting for discriminator loss, yolo weight is 1.0")
