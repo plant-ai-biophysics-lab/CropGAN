@@ -9,6 +9,7 @@ from pytorchyolo.utils.utils import worker_seed_set
 from datasets import UDAListDataset
 
 K_VAL_MAP = {
+    -1:24, # Use for test runs, 24 is the full test set
     1:1,
     4:1,
     8:1,
