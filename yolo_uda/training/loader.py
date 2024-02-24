@@ -47,7 +47,10 @@ def prepare_data(train_path, target_train_path, target_val_path, K=0, skip_prepa
 
     # loop through the files in the directory
     for i in range(0,3):
-        for filename in os.listdir(paths[i]):
+        filenames = os.listdir(paths[i])
+        if i == 1:
+            random.shuffle(filenames)
+        for filename in filenames:
             if filename.endswith('.jpg') or filename.endswith('.jpeg') or filename.endswith('.png'):
                 file_path = os.path.join(paths[i],filename)
                 if i == 0:
@@ -56,7 +59,7 @@ def prepare_data(train_path, target_train_path, target_val_path, K=0, skip_prepa
                 elif i == 1 and len(target_val_paths) < K_val:
                     target_val_paths.append(file_path)
                     sample_loc_target_val.append(1)
-                else:
+                elif i == 2:
                     train_paths.append(file_path)
                     sample_loc_train.append(0)
     

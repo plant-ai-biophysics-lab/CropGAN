@@ -372,7 +372,7 @@ def train(
 
             # Save the best checkpoint for each metric
             save_date = datetime.today().strftime('%Y-%m-%d_%H-%M-%S')
-            ckpt_name = "ckpt_best_{mt}-{value}_epoch-{epoch}_{date}.pth"
+            ckpt_name = "ckpt_best_{mt}.pth"
             if precision.mean() >= best_precision:
                 best_precision = precision.mean()
                 if precision_ckpt_name:
