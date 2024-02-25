@@ -103,7 +103,7 @@ class Discriminator(nn.Module):
     A 3-layer MLP + Gradient Reversal Layer for domain classification.
     """
 
-    def __init__(self, in_size=255*13*13, h=2048, out_size=1, alpha=1.0):
+    def __init__(self, in_size=255, h=2048, out_size=1, alpha=1.0):
         """
         Arguments:
             in_size: size of the input
@@ -125,7 +125,8 @@ class Discriminator(nn.Module):
         )
 
     def forward(self, x):
-        return self.net(torch.flatten(x,1)).squeeze(-1)
+        flattened_activations = torch.flatten(x.permute(0,2,3,1),0,2) # [batch*h*w,n_channels]
+        return self.net(flattened_activations).squeeze(-1)
 
 #####################
 # YOLO architecture #

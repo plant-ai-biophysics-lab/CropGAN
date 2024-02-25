@@ -109,12 +109,16 @@ def discriminator_step(
     """
     outputs = discriminator(map_features)
     
+    # Repeat image labels for each activation
+    activation_dims = map_features.shape[2] * map_features.shape[3]
+    labels_by_activation = torch.flatten(labels.repeat(activation_dims,1).T)
+
     # calculate accuracy
-    discriminator_acc = binary_accuracy(outputs, labels)
+    discriminator_acc = binary_accuracy(outputs, labels_by_activation)
     
     # calculate loss
     # discriminator_loss = cross_entropy(outputs, labels.float())
-    discriminator_loss = bce(outputs, labels.float())
+    discriminator_loss = bce(outputs, labels_by_activation.float())
     
     return discriminator_loss, discriminator_acc
 

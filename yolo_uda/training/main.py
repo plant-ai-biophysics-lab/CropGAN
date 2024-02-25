@@ -52,7 +52,8 @@ def main(args, hyperparams, run):
     )
     
     validation_dataloader = _create_validation_data_loader(
-        os.path.dirname(args.target_val_path)+f"/target_val_k_{args.k}.txt",
+        # os.path.dirname(args.target_val_path)+f"/target_val_k_{args.k}.txt",
+        os.path.dirname(args.target_val_path)+f"/target_val_full.txt",
         batch_size=1,
         img_size=hyperparams['img_size'],
         n_cpu=args.n_cpu
@@ -179,7 +180,7 @@ if __name__ == '__main__':
     }
 
     # initialize wandb
-    run = wandb.init(project='yolo-uda-final', name=args.name)
+    run = wandb.init(project='yolo-uda', name=args.name)
     wandb.config.update(hyperparams)
     
     # start run

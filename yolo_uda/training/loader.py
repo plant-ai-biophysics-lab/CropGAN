@@ -56,7 +56,8 @@ def prepare_data(train_path, target_train_path, target_val_path, K=0, skip_prepa
                 if i == 0:
                     target_train_paths.append(file_path)
                     sample_loc_target_train.append(1)
-                elif i == 1 and len(target_val_paths) < K_val:
+                elif i == 1:
+                # elif i == 1 and len(target_val_paths) < K_val:
                     target_val_paths.append(file_path)
                     sample_loc_target_val.append(1)
                 elif i == 2:
@@ -73,7 +74,8 @@ def prepare_data(train_path, target_train_path, target_val_path, K=0, skip_prepa
     # write to txt file if doesn't exist
     train_output = os.path.join(os.path.dirname(train_path), f'train_k_{K}.txt')
     target_train_output = os.path.join(os.path.dirname(target_train_path), 'target_train.txt')
-    target_val_output = os.path.join(os.path.dirname(target_val_path), f'target_val_k_{K}.txt')
+    # target_val_output = os.path.join(os.path.dirname(target_val_path), f'target_val_k_{K}.txt')
+    target_val_output = os.path.join(os.path.dirname(target_val_path), f'target_val_full.txt')
     
     for fname, sample_locs, paths in zip(
             [train_output, target_train_output, target_val_output],
