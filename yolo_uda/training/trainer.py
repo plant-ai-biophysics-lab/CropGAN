@@ -303,7 +303,8 @@ def train(
                 
             # Run optimizer
             optimizer.step()
-            optimizer_classifier.step()
+            if batches_done % 3 == 0:
+                optimizer_classifier.step()
 
             # Metrics
             # Track discriminator accuracy
