@@ -110,6 +110,9 @@ def discriminator_step(
     outputs = discriminator(map_features)
     
     # Repeat image labels for each activation
+    # Soften labels to 0.05 and 0.95
+    labels = labels * 0.9 + 0.05
+
     activation_dims = map_features.shape[2] * map_features.shape[3]
     labels_by_activation = torch.flatten(labels.repeat(activation_dims,1).T)
 
