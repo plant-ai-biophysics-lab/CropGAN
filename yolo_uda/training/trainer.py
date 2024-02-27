@@ -14,7 +14,7 @@ from torchmetrics.classification import BinaryAccuracy
 from pytorchyolo.utils.loss import compute_loss
 from pytorchyolo.utils.utils import to_cpu, ap_per_class, get_batch_statistics, non_max_suppression, xywh2xyxy
 from models import Upsample
-from metrics import FeatureMapCosineSimilarity, FeatureMapEuclideanDistance
+from metrics import FeatureMapCosineSimilarity, FeatureMapEuclideanDistance, MMDLoss, RBF
 
 
 # for loss calculations
@@ -212,6 +212,9 @@ def train(
         # Euclidean distance metrics
         euclidean_distance_metrics_l15 = FeatureMapEuclideanDistance(layer="15")
         euclidean_distance_metrics_l22 = FeatureMapEuclideanDistance(layer="22")
+        
+        # MMD calculation
+        mmd_loss = MMDLoss()
 
         # tracker
         updated_lr_this_epoch = False
@@ -314,6 +317,9 @@ def train(
             # Update euclidean distance metrics
             euclidean_distance_metrics_l15.update(source_features=source_features[0],target_features=target_features[0])
             euclidean_distance_metrics_l22.update(source_features=source_features[1],target_features=target_features[1])
+            
+            # Calculate average MMD loss per batch
+            mmd_loss(source_features[1], target_features[1])
           
             # log progress
             if verbose:
@@ -343,7 +349,7 @@ def train(
         
         # Average cosine similarity within source, within target, and across source-target
         # For both feature layers
-        for metric in [cosine_similarity_metrics_l15, cosine_similarity_metrics_l22, euclidean_distance_metrics_l15, euclidean_distance_metrics_l22]:
+        for metric in [cosine_similarity_metrics_l15, cosine_similarity_metrics_l22, euclidean_distance_metrics_l15, euclidean_distance_metrics_l22, mmd_loss]:
             wandb.log(metric.return_metrics(), step=batches_done)
             metric.reset()
 
