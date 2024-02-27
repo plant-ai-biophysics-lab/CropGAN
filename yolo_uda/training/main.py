@@ -1,12 +1,14 @@
 import argparse
 import wandb
 import os
+import pathlib
+
 import torch
 import torch.optim as optim
-
 from PIL import Image
 from torchvision import transforms
 # from pytorchyolo.test import _create_validation_data_loader
+
 from loader import prepare_data, _create_data_loader, _create_validation_data_loader
 from models import load_model, Discriminator, Upsample
 from trainer import train
@@ -15,7 +17,7 @@ from datetime import datetime
 
 
 def main(args, hyperparams, run):
-
+    
     # initialize class names
     class_names = [str(i) for i in range(args.num_classes)]
 
@@ -23,7 +25,7 @@ def main(args, hyperparams, run):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
     # prepare data
-    prepare_data(args.train_path, args.val_path, args.k, args.skip_preparation)
+    prepare_data(args.train_path, args.target_train_path, args.target_val_path, args.k, args.skip_preparation)
     
     # load models
     model = load_model(args.config, args.pretrained_weights).to(device)
@@ -35,14 +37,14 @@ def main(args, hyperparams, run):
     mini_batch_size = hyperparams['batch_size']
     
     source_dataloader = _create_data_loader(
-        os.path.dirname(args.train_path)+"/train.txt",
+        os.path.dirname(args.train_path)+f"/train_k_{args.k}.txt",
         batch_size=hyperparams['batch_size'],
         img_size=hyperparams['img_size'],
         n_cpu=args.n_cpu,
         multiscale_training=False
     )
     target_dataloader = _create_data_loader(
-        os.path.dirname(args.val_path)+"/val.txt",
+        os.path.dirname(args.target_train_path)+"/target_train.txt",
         batch_size=hyperparams['batch_size'],
         img_size=hyperparams['img_size'],
         n_cpu=args.n_cpu,
@@ -50,7 +52,7 @@ def main(args, hyperparams, run):
     )
     
     validation_dataloader = _create_validation_data_loader(
-        os.path.dirname(args.val_path)+"/val.txt",
+        os.path.dirname(args.target_val_path)+f"/target_val_k_{args.k}.txt",
         batch_size=1,
         img_size=hyperparams['img_size'],
         n_cpu=args.n_cpu
@@ -84,6 +86,11 @@ def main(args, hyperparams, run):
         
     else:
         # train
+        save_folder = f"k-{args.k}_alpha-{args.alpha}_lambda-{args.lambda_disc}"
+        save_dir = os.path.join(args.save, save_folder)
+        
+        pathlib.Path(save_dir).mkdir(parents=True, exist_ok=True) 
+        
         model = train(
             model=model,
             discriminator=discriminator,
@@ -97,19 +104,18 @@ def main(args, hyperparams, run):
             lambda_discriminator=args.lambda_disc,
             verbose=args.verbose,
             epochs=args.epochs,
-            evaluate_interval=args.eval_interval,
+            save_dir=save_dir,
             class_names=class_names,
             iou_thresh=hyperparams["iou_thresh"],
             conf_thresh=hyperparams["conf_thresh"],
             nms_thresh=hyperparams["nms_thresh"]
         )
-
         # save model weights
-        save_name = f"ckpt_last_k={args.k}_alpha={args.alpha}_lambda={args.lambda_disc}_{datetime.today().strftime('%Y-%m-%d_%H-%M-%S')}.pth"
-        save_dir = os.path.join(args.save, save_name)
-        torch.save(model.state_dict(), save_dir)
+        save_name = f"ckpt_last_{datetime.today().strftime('%Y-%m-%d_%H-%M-%S')}.pth"
+        save_filepath = os.path.join(save_dir, save_name)
+        torch.save(model.state_dict(), save_filepath)
         best_model = wandb.Artifact(args.name, type="model")
-        best_model.add_file(save_dir)
+        best_model.add_file(save_filepath)
         # run.log_artifact(best_model)
         # run.link_artifact(best_model, "model-registry/yolo-uda")
     
@@ -117,7 +123,7 @@ if __name__ == '__main__':
     ap = argparse.ArgumentParser()
     ap.add_argument("-k", type=int, default=0,
                     help="Number of target examples to add to training set")
-    ap.add_argument("-a", "--alpha", type=float, required=True,
+    ap.add_argument("-a", "--alpha", type=float, default=0.0,
                     help="Constant for gradient reversal layer")
     ap.add_argument("-l", "--lambda-disc", type=float, default=0.5,
                     help="Weighting for discriminator loss, yolo weight is 1.0")
@@ -129,8 +135,10 @@ if __name__ == '__main__':
                     help="Number of samples per batch.")
     ap.add_argument("-t", "--train-path", required=True,
                     help="Path to file containing training images")
-    ap.add_argument("-v", "--val-path", required=True,
-                    help="Path to file containing validation images")
+    ap.add_argument("-tt", "--target-train-path", required=True,
+                    help="Path to file containing target training images")
+    ap.add_argument("-tv", "--target-val-path", required=True,
+                    help="Path to file containing target validation images")
     ap.add_argument("-c", "--config", required=True,
                     help="YOLOv3 configuration file")
     ap.add_argument("-p", "--pretrained_weights",
@@ -139,7 +147,7 @@ if __name__ == '__main__':
                     help="Number of training epochs")
     ap.add_argument("--n-cpu", type=int, default=6,
                     help="Number of cpu threads")
-    ap.add_argument("--eval_interval", type=int, default=1,
+    ap.add_argument("--eval_interval", type=int, default=50,
                     help="Evaluate model every eval_interval epochs")
     ap.add_argument("--eval-only", action="store_true",
                     help="Only runs validation with the provided model weights.")
@@ -171,7 +179,7 @@ if __name__ == '__main__':
     }
 
     # initialize wandb
-    run = wandb.init(project='yolo-uda', name=args.name)
+    run = wandb.init(project='yolo-uda-final', name=args.name)
     wandb.config.update(hyperparams)
     
     # start run

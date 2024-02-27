@@ -8,52 +8,82 @@ from pytorchyolo.utils.utils import worker_seed_set
 
 from datasets import UDAListDataset
 
-def prepare_data(train_path, val_path, K=0, skip_preparation=False):
+K_VAL_MAP = {
+    -1:24, # Use for test runs, 24 is the full test set
+    1:1,
+    4:1,
+    8:1,
+    12:2,
+    16:3,
+    24:6,
+    32:8,
+    40:10,
+    98:28,
+    58:15
+}
+
+def prepare_data(train_path, target_train_path, target_val_path, K=0, skip_preparation=False):
     if skip_preparation:
         print("Skipping file preparation")
         return
 
+    # K_val is determined by k per CropGAN paper.   
+    if K in K_VAL_MAP:
+        K_val = K_VAL_MAP[K]
+    else:
+        # For Gemini if we use a different k value than in paper.
+        K_val = max(1,int(0.25*K))
+
     # create list to store file paths
-    paths = [val_path, train_path]
+    paths = [target_train_path, target_val_path, train_path]
     train_paths = []
-    val_paths = []
+    target_train_paths = []
+    target_val_paths = []
 
     # create a list to track whether a sample is target/source
     sample_loc_train = []
-    sample_loc_val = []
+    sample_loc_target_train = []
+    sample_loc_target_val = []
 
     # loop through the files in the directory
-    for i in range(0,2):
-        for filename in os.listdir(paths[i]):
+    for i in range(0,3):
+        filenames = os.listdir(paths[i])
+        if i == 1:
+            random.shuffle(filenames)
+        for filename in filenames:
             if filename.endswith('.jpg') or filename.endswith('.jpeg') or filename.endswith('.png'):
                 file_path = os.path.join(paths[i],filename)
                 if i == 0:
-                    val_paths.append(file_path)
-                    sample_loc_val.append(1)
-                else:
+                    target_train_paths.append(file_path)
+                    sample_loc_target_train.append(1)
+                elif i == 1 and len(target_val_paths) < K_val:
+                    target_val_paths.append(file_path)
+                    sample_loc_target_val.append(1)
+                elif i == 2:
                     train_paths.append(file_path)
                     sample_loc_train.append(0)
     
     # add target examples if K > 0
     if K > 0:
-        sample = random.sample(range(0, len(val_paths)), K)
-        examples = [val_paths[i] for i in sample]
+        sample = random.sample(range(0, len(target_train_paths)), K)
+        examples = [target_train_paths[i] for i in sample]
         train_paths += examples
         sample_loc_train += [1] * K
 
-    # write to txt file
-    train_output = os.path.join(os.path.dirname(train_path), 'train.txt')
-    val_output = os.path.join(os.path.dirname(val_path), 'val.txt')
-
-
+    # write to txt file if doesn't exist
+    train_output = os.path.join(os.path.dirname(train_path), f'train_k_{K}.txt')
+    target_train_output = os.path.join(os.path.dirname(target_train_path), 'target_train.txt')
+    target_val_output = os.path.join(os.path.dirname(target_val_path), f'target_val_k_{K}.txt')
+    
     for fname, sample_locs, paths in zip(
-            [train_output, val_output],
-            [sample_loc_train, sample_loc_val],
-            [train_paths, val_paths]):
-        with open(fname, 'w') as file:
-            for path, loc in zip(paths, sample_locs):
-                file.write(path + ' ' + str(loc) + '\n')
-        print(f"File paths have been saved to {fname}")
+            [train_output, target_train_output, target_val_output],
+            [sample_loc_train, sample_loc_target_train, sample_loc_target_val],
+            [train_paths, target_train_paths, target_val_paths]):
+        if not os.path.exists(fname):
+            with open(fname, 'w') as file:
+                for path, loc in zip(paths, sample_locs):
+                    file.write(path + ' ' + str(loc) + '\n')
+            print(f"File paths have been saved to {fname}")
 
         
 def _create_data_loader(img_path, batch_size, img_size, n_cpu, multiscale_training=False):

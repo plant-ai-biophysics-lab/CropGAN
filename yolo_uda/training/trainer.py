@@ -1,8 +1,10 @@
+import os
+from datetime import datetime
+
 import torch
 import tqdm
 import wandb
 import numpy as np
-
 from torch import nn
 import torch.nn.functional as F
 from terminaltables import AsciiTable
@@ -13,6 +15,7 @@ from pytorchyolo.utils.loss import compute_loss
 from pytorchyolo.utils.utils import to_cpu, ap_per_class, get_batch_statistics, non_max_suppression, xywh2xyxy
 from models import Upsample
 from metrics import FeatureMapCosineSimilarity, FeatureMapEuclideanDistance
+
 
 # for loss calculations
 # cross_entropy = nn.CrossEntropyLoss()
@@ -115,6 +118,7 @@ def discriminator_step(
     
     return discriminator_loss, discriminator_acc
 
+
 def compose_discriminator_batch(source_features: torch.Tensor, target_features: torch.Tensor,
                                 mini_batch_size: int, downsample_2: nn.Module, downsample_4: nn.Module,
                                 labels_source: torch.Tensor, labels_target: torch.Tensor,
@@ -168,10 +172,10 @@ def train(
     mini_batch_size: int,
     target_dataloader: DataLoader,
     validation_dataloader: DataLoader,
+    save_dir: str,
     lambda_discriminator: float = 0.5,
     verbose: bool = False,
     epochs: int = 10,
-    evaluate_interval: int = 1,
     class_names: list = None,
     iou_thresh: float = 0.5,
     conf_thresh: float = 0.5,
@@ -183,6 +187,10 @@ def train(
     downsample_4 = Upsample(scale_factor=0.25, mode="nearest")
     batches_done = 0
 
+    best_map, map_ckpt_name = 0.0, ""
+    best_precision, precision_ckpt_name = 0.0, ""
+    best_recall, recall_ckpt_name = 0.0, ""
+    best_f1, f1_ckpt_name = 0.0, ""
     for epoch in range(1, epochs+1):
         print("\n---- Training Model ----")
         wandb.log({'epoch': epoch}, step=batches_done)
@@ -326,44 +334,78 @@ def train(
                 "yolo_loss": float(loss_components[3]),
                 # "dscm_acc": float(discriminator_acc),
                 "dscm_loss": float(discriminator_loss)
-                },
-                step=batches_done)
+            }, step=batches_done)
             model.seen += imgs_s.size(0)
-
 
         # Training epoch metrics
         # Discriminator accuracy
-        wandb.log({"dscm_acc": discriminator_acc["total"]/discriminator_acc["batch_count"]}, step=batches_done)
+        wandb.log({"dscm_acc": discriminator_acc["total"] / discriminator_acc["batch_count"]}, step=batches_done)
         
         # Average cosine similarity within source, within target, and across source-target
         # For both feature layers
         for metric in [cosine_similarity_metrics_l15, cosine_similarity_metrics_l22, euclidean_distance_metrics_l15, euclidean_distance_metrics_l22]:
             wandb.log(metric.return_metrics(), step=batches_done)
             metric.reset()
-                
-        # evaluate
-        if epoch % evaluate_interval == 0:
-            print("\n---- Evaluating Model ----")
-            # Evaluate the model on the validation set
-            metrics_output = _evaluate(
-                model,
-                validation_dataloader,
-                class_names,
-                img_size=model.hyperparams['height'],
-                iou_thres=iou_thresh,
-                conf_thres=conf_thresh,
-                nms_thres=nms_thresh,
-                verbose=verbose
-            )
 
-            if metrics_output is not None:
-                precision, recall, AP, f1, ap_class = metrics_output
-                wandb.log({
-                    "precision": precision.mean(),
-                    "recall": recall.mean(),
-                    "f1": f1.mean(),
-                    "mAP": AP.mean()
-                },
-                step=batches_done)
+        # evaluate
+        print("\n---- Evaluating Model ----")
+        # Evaluate the model on the validation set
+        metrics_output = _evaluate(
+            model,
+            validation_dataloader,
+            class_names,
+            img_size=model.hyperparams['height'],
+            iou_thres=iou_thresh,
+            conf_thres=conf_thresh,
+            nms_thres=nms_thresh,
+            verbose=verbose
+        )
+
+        if metrics_output is not None:
+            precision, recall, AP, f1, ap_class = metrics_output
+            wandb.log({
+                "precision": precision.mean(),
+                "recall": recall.mean(),
+                "f1": f1.mean(),
+                "mAP": AP.mean()
+            }, step=batches_done)
+
+            # Save the best checkpoint for each metric
+            save_date = datetime.today().strftime('%Y-%m-%d_%H-%M-%S')
+            ckpt_name = "ckpt_best_{mt}.pth"
+            if precision.mean() >= best_precision:
+                best_precision = precision.mean()
+                if precision_ckpt_name:
+                    os.remove(os.path.join(save_dir, precision_ckpt_name))
+                precision_ckpt_name = ckpt_name.format(
+                    mt="precision", value=best_precision, date=save_date, epoch=epoch)
+                torch.save(model.state_dict(),
+                           os.path.join(save_dir, precision_ckpt_name))
+            if recall.mean() >= best_recall:
+                best_recall = recall.mean()
+                if recall_ckpt_name:
+                    os.remove(os.path.join(save_dir, recall_ckpt_name))
+                recall_ckpt_name = ckpt_name.format(
+                    mt="recall", value=best_recall, date=save_date, epoch=epoch)
+                torch.save(model.state_dict(),
+                           os.path.join(save_dir, recall_ckpt_name))
+            if AP.mean() >= best_map:
+                best_map = AP.mean()
+                if map_ckpt_name:
+                    os.remove(os.path.join(save_dir, map_ckpt_name))
+                map_ckpt_name = ckpt_name.format(
+                    mt="map", value=best_map, date=save_date, epoch=epoch)
+                torch.save(model.state_dict(),
+                           os.path.join(save_dir, map_ckpt_name))
+            if f1.mean() >= best_f1:
+                best_f1 = f1.mean()
+                if f1_ckpt_name:
+                    os.remove(os.path.join(save_dir, f1_ckpt_name))
+                f1_ckpt_name = ckpt_name.format(
+                    mt="f1", value=best_f1, date=save_date, epoch=epoch)
+                torch.save(model.state_dict(),
+                           os.path.join(save_dir, f1_ckpt_name))
+
     
     return model
+
