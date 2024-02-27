@@ -258,8 +258,7 @@ def train(
                 labels_target=labels_target,
                 device=device)
             
-            discriminator_loss, batch_discriminator_acc = discriminator_step(discriminator, features, labels, 2*mini_batch_size)
-            
+            discriminator_loss, batch_discriminator_acc = discriminator_step(discriminator, features, labels, 2*mini_batch_size)            
  
             # run backward propagation
             loss = yolo_loss + lambda_discriminator * discriminator_loss
@@ -269,14 +268,17 @@ def train(
             # if batches_done % model.hyperparams['subdivisions'] == 0:
             # adapt learning rate
             lr = model.hyperparams['learning_rate']
+            lr_disc = discriminator.lr
             if batches_done < model.hyperparams['burn_in']:
                 lr *= (batches_done / model.hyperparams['burn_in'])
+                lr_disc *= (batches_done / model.hyperparams['burn_in'])
             else:
                 # manually select which steps to decay the LR, and by what value
                 if 'lr_steps' in model.hyperparams:
                     for threshold, value in model.hyperparams['lr_steps']:
                         if batches_done > threshold:
                             lr *= value
+                            lr_disc *= value
 
                 # decay every N steps or every N epochs
                 elif 'lr_gamma' in model.hyperparams:
@@ -285,7 +287,9 @@ def train(
                             print("Decaying learning rate ({}) by gamma {}".format(lr, model.hyperparams['lr_gamma'])
                                   + " to {}".format(lr * model.hyperparams['lr_gamma']))
                             lr = lr * model.hyperparams['lr_gamma']
+                            lr_disc = lr_disc * model.hyperparams['lr_gamma']
                             model.hyperparams['learning_rate'] = lr
+                            discriminator.lr = lr_disc
                     elif 'lr_epoch' in model.hyperparams:
                         if epoch % model.hyperparams['lr_epoch'] == 0:
                             if not updated_lr_this_epoch:
@@ -293,15 +297,18 @@ def train(
                                 print("Decaying learning rate ({}) by gamma {}".format(lr, model.hyperparams['lr_gamma'])
                                       + " to {}".format(lr * model.hyperparams['lr_gamma']))
                                 lr = lr * model.hyperparams['lr_gamma']
+                                lr_disc = lr_disc * model.hyperparams['lr_gamma']
                                 model.hyperparams['learning_rate'] = lr
+                                discriminator.lr = lr_disc
 
             # log the learning rate
-            wandb.log({"lr": lr}, step=batches_done)
+            wandb.log({"lr": lr, "lr_disc": lr_disc}, step=batches_done)
 
             # set learning rate
             for g in optimizer.param_groups:
                 g['lr'] = lr
-                
+            for g in optimizer_classifier.param_groups:
+                g['lr'] = lr_disc                
             # Run optimizer
             optimizer.step()
             if batches_done % 3 == 0:

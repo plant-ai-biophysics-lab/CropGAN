@@ -103,7 +103,7 @@ class Discriminator(nn.Module):
     A 3-layer MLP + Gradient Reversal Layer for domain classification.
     """
 
-    def __init__(self, in_size=255, h=2048, out_size=1, alpha=1.0):
+    def __init__(self, in_size=255, h=2048, out_size=1, alpha=1.0, lr: float = None):
         """
         Arguments:
             in_size: size of the input
@@ -113,7 +113,7 @@ class Discriminator(nn.Module):
         """
 
         super().__init__()
-
+        
         self.net = nn.Sequential(
             GradientReversal(alpha=alpha),
             nn.Linear(in_size, h),
@@ -123,6 +123,8 @@ class Discriminator(nn.Module):
             nn.Linear(h, out_size),
             nn.Sigmoid()
         )
+
+        self.lr = lr
 
     def forward(self, x):
         flattened_activations = torch.flatten(x.permute(0,2,3,1),0,2) # [batch*h*w,n_channels]

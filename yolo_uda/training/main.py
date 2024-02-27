@@ -30,7 +30,7 @@ def main(args, hyperparams, run):
     # load models
     model = load_model(args.config, args.pretrained_weights).to(device)
     wandb.config.update(model.hyperparams)
-    discriminator = Discriminator(alpha=args.alpha).to(device)
+    discriminator = Discriminator(alpha=args.alpha, lr=hyperparams["learning_rate_disc"]).to(device)
     
     # create dataloaders
     # mini_batch_size = model.hyperparams['batch'] // model.hyperparams['subdivisions']
