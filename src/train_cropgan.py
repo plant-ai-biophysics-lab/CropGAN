@@ -6,8 +6,11 @@ Step 1: Initialize a YOLO model from real A.
     Step 4: Further train YOLO model using the data generate in step 3. [A better YOLO!]
     Return to step 2
 """
-import time
+
 import os
+import glob
+import time
+
 from options.train_options import TrainOptions
 from data import create_dataset
 from models import create_model
@@ -43,6 +46,30 @@ if __name__ == '__main__':
     print("opt: ", opt)
     dataset_size = len(dataset)    # get the number of images in the dataset.
     print('The number of training images = %d' % dataset_size)
+    
+    # speed up life
+    # (auto-detect checkpoint location based on the given alpha/lambda, and search
+    #  within the respective folder for the latest `ckpt_last_*.pth` model file).
+    opt.yolo_b_weights = opt.yolo_a_weights
+    if os.path.isdir(opt.yolo_a_weights):
+        possible_weight_path = os.path.join(
+            opt.yolo_a_weights, f"k-{opt.reverse_task_k}_alpha-{opt.grl_alpha}_lambda-{opt.grl_lambda}", "ckpt_last_*.pth")
+        print(f"Searching for weights at {possible_weight_path}")
+        weight_files = glob.glob(possible_weight_path)
+
+        latest_weight, latest_time = "", datetime.datetime(2024, 1, 1)
+        for weight_file in weight_files:
+            print(weight_file)
+            weight_time = "_".join(os.path.splitext(os.path.basename(weight_file))[0].split("_")[-2:])
+            weight_time = datetime.datetime.strptime(weight_time, '%Y-%m-%d_%H-%M-%S')
+            if weight_time > latest_time:
+                latest_weight, latest_time = weight_file, weight_time
+
+        if latest_weight == "":
+            raise FileNotFoundError(f"No weights found at {possible_weight_path}")
+
+        opt.yolo_a_weights = latest_weight
+        opt.yolo_b_weights = latest_weight
 
     model = create_model(opt)      # create a model given opt.model and other options
     model.setup(opt)               # regular setup: load and print networks; create schedulers
