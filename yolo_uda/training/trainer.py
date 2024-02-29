@@ -215,7 +215,7 @@ def train(
         euclidean_distance_metrics_l22 = FeatureMapEuclideanDistance(layer="22")
         
         # MMD calculation
-        mmd_loss = MMDLoss()
+        mmd_metric = MMDLoss()
 
         # tracker
         updated_lr_this_epoch = False
@@ -260,10 +260,10 @@ def train(
             discriminator_loss, batch_discriminator_acc = discriminator_step(discriminator, features, labels, 2*mini_batch_size)
 
             # Calculate average MMD loss per batch
-            mmd_loss(source_features[1], target_features[1])
+            mmd_loss = mmd_metric(source_features[1], target_features[1])
 
             # run backward propagation
-            loss = yolo_loss + lambda_discriminator * discriminator_loss + lambda_mmd * mmd_loss.mmd_loss
+            loss = yolo_loss + lambda_discriminator * discriminator_loss + lambda_mmd * mmd_loss
             loss.backward()
 
             # run optimizer
@@ -350,7 +350,7 @@ def train(
         
         # Average cosine similarity within source, within target, and across source-target
         # For both feature layers
-        for metric in [cosine_similarity_metrics_l15, cosine_similarity_metrics_l22, euclidean_distance_metrics_l15, euclidean_distance_metrics_l22, mmd_loss]:
+        for metric in [cosine_similarity_metrics_l15, cosine_similarity_metrics_l22, euclidean_distance_metrics_l15, euclidean_distance_metrics_l22, mmd_metric]:
             wandb.log(metric.return_metrics(), step=batches_done)
             metric.reset()
 
