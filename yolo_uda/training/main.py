@@ -174,6 +174,7 @@ if __name__ == '__main__':
         "nms_thresh": 0.5,
         "alpha": args.alpha,
         "lambda": args.lambda_disc,
+        "gamma": args.gamma_mmd,
         "decay_disc": args.decay_disc,
         "k": args.k,
         "img_size": 416,
