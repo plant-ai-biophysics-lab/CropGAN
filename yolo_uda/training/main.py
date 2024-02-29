@@ -183,7 +183,7 @@ if __name__ == '__main__':
     }
 
     # initialize wandb
-    run = wandb.init(project='yolo-uda-final', name=args.name)
+    run = wandb.init(project='yolo-uda', name=args.name)
     wandb.config.update(hyperparams)
     
     # start run
