@@ -56,7 +56,7 @@ class UDAImageFolder(Dataset):
 
 
 class UDAListDataset(Dataset):
-    def __init__(self, list_path, img_size=416, multiscale=True, transform=None):
+    def __init__(self, list_path, label_path=None, img_size=416, multiscale=True, transform=None):
         with open(list_path, "r") as file:
             self.label_nums = []
             self.img_files = []
@@ -71,7 +71,10 @@ class UDAListDataset(Dataset):
         self.label_files = []
         for path in self.img_files:
             image_dir = os.path.dirname(path)
-            label_dir = "labels".join(image_dir.rsplit("images", 1))
+            if label_path:
+                label_dir = label_path
+            else:
+                label_dir = "labels".join(image_dir.rsplit("images", 1))
             assert label_dir != image_dir, \
                 f"Image path must contain a folder named 'images'! \n'{image_dir}'"
             label_file = os.path.join(label_dir, os.path.basename(path))

@@ -38,6 +38,7 @@ def main(args, hyperparams, run):
     
     source_dataloader = _create_data_loader(
         os.path.dirname(args.train_path)+f"/train_k_{args.k}.txt",
+        label_path=args.train_label_path,
         batch_size=hyperparams['batch_size'],
         img_size=hyperparams['img_size'],
         n_cpu=args.n_cpu,
@@ -135,6 +136,8 @@ if __name__ == '__main__':
                     help="Number of samples per batch.")
     ap.add_argument("-t", "--train-path", required=True,
                     help="Path to file containing training images")
+    ap.add_argument("--train-label-path", default=None,
+                    help="If labels are not in same directory as images, pass label path here")
     ap.add_argument("-tt", "--target-train-path", required=True,
                     help="Path to file containing target training images")
     ap.add_argument("-tv", "--target-val-path", required=True,
