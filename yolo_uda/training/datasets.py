@@ -69,9 +69,9 @@ class UDAListDataset(Dataset):
                 self.label_nums.append(int(line.split()[1]))
 
         self.label_files = []
-        for path in self.img_files:
+        for img_idx, path in enumerate(self.img_files):
             image_dir = os.path.dirname(path)
-            if label_path:
+            if label_path and self.label_nums[img_idx] == 0:
                 label_dir = label_path
             else:
                 label_dir = "labels".join(image_dir.rsplit("images", 1))
