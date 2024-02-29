@@ -128,7 +128,7 @@ if __name__ == '__main__':
                     help="Constant for gradient reversal layer")
     ap.add_argument("-l", "--lambda-disc", type=float, default=0.5,
                     help="Weighting for discriminator loss, yolo weight is 1.0")
-    ap.add_argument("-l", "--lambda-mmd", type=float, default=0.001,
+    ap.add_argument("--lambda-mmd", type=float, default=0.001,
                     help="Weighting for MMD loss, yolo weight is 1.0")
     ap.add_argument("--lr-disc", type=float, default=0.0001,
                     help="Learning rate for discriminator")
