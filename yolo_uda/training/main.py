@@ -86,7 +86,7 @@ def main(args, hyperparams, run):
         
     else:
         # train
-        save_folder = f"k-{args.k}_alpha-{args.alpha}_lambda-{args.lambda_disc}"
+        save_folder = f"k-{args.k}_alpha-{args.alpha}_lambda-{args.lambda_disc}_lmmd-{args.lambda_mmd}"
         save_dir = os.path.join(args.save, save_folder)
         
         pathlib.Path(save_dir).mkdir(parents=True, exist_ok=True) 
@@ -102,6 +102,7 @@ def main(args, hyperparams, run):
             target_dataloader=target_dataloader,
             validation_dataloader=validation_dataloader,
             lambda_discriminator=args.lambda_disc,
+            lambda_mmd=args.lambda_mmd,
             verbose=args.verbose,
             epochs=args.epochs,
             save_dir=save_dir,
@@ -127,6 +128,8 @@ if __name__ == '__main__':
                     help="Constant for gradient reversal layer")
     ap.add_argument("-l", "--lambda-disc", type=float, default=0.5,
                     help="Weighting for discriminator loss, yolo weight is 1.0")
+    ap.add_argument("--lambda-mmd", type=float, default=0.001,
+                    help="Weighting for MMD loss, yolo weight is 1.0")
     ap.add_argument("--lr-disc", type=float, default=0.0001,
                     help="Learning rate for discriminator")
     ap.add_argument("--decay-disc", type=float, default=0.0001,
@@ -171,6 +174,7 @@ if __name__ == '__main__':
         "nms_thresh": 0.5,
         "alpha": args.alpha,
         "lambda": args.lambda_disc,
+        "lambda_mmd": args.lambda_mmd,
         "decay_disc": args.decay_disc,
         "k": args.k,
         "img_size": 416,
@@ -179,7 +183,7 @@ if __name__ == '__main__':
     }
 
     # initialize wandb
-    run = wandb.init(project='yolo-uda-final', name=args.name)
+    run = wandb.init(project='yolo-uda', name=args.name)
     wandb.config.update(hyperparams)
     
     # start run
