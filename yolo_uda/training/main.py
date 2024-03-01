@@ -184,7 +184,7 @@ if __name__ == '__main__':
 
     # update the run name with the domain
     args.name = ("k-" + str(args.k) + "_a-" + str(args.alpha) + "_l-" + str(args.lambda_disc) + "_"
-                 + "day" if "BordenDay" in args.train_path else "night" if "BordenNight" in args.train_path else ""
+                 + ("day" if "BordenDay" in args.train_path else "night" if "BordenNight" in args.train_path else "")
                  + "_" + args.name)
     if args.alpha == 0 and args.lambda_disc == 0:
         args.name = "BASELINE_" + args.name
