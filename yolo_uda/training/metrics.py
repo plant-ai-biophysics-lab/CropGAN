@@ -131,3 +131,4 @@ class MMDLoss(nn.Module):
         mmd_loss = XX - 2 * XY + YY
         self.mmd_loss += mmd_loss
         self.batch_count += 1
+        return mmd_loss
