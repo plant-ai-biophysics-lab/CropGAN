@@ -85,6 +85,7 @@ def validate(
     model: nn.Module,
     device: torch.device,
     validation_dataloader: DataLoader,
+    run: wandb.run,
     class_names: list = ["0"],
     iou_thresh: float = 0.5,
     conf_thresh: float = 0.5,
@@ -114,13 +115,12 @@ def validate(
         nms_thres=nms_thresh,
         verbose=verbose
     )
-
+    
     if metrics_output is not None:
         precision, recall, AP, f1, ap_class = metrics_output
-        wandb.log({
-            "precision": precision.mean(),
-            "recall": recall.mean(),
-            "f1": f1.mean(),
-            "mAP": AP.mean()
-        },
-        step=0)
+        run.log({
+            "test_precision": precision.mean(),
+            "test_recall": recall.mean(),
+            "test_f1": f1.mean(),
+            "test_mAP": AP.mean()
+        })

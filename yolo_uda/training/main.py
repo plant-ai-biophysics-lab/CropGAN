@@ -15,6 +15,10 @@ from trainer import train
 from validate import validate
 from datetime import datetime
 
+def create_save_dir(args):
+    save_folder = f"k-{args.k}_alpha-{args.alpha}_lambda-{args.lambda_disc}_lmmd-{args.lambda_mmd}"
+    save_dir = os.path.join(args.save, save_folder)
+    return save_dir
 
 def main(args, hyperparams, run):
     
@@ -81,13 +85,13 @@ def main(args, hyperparams, run):
             class_names = class_names,
             iou_thresh=hyperparams["iou_thresh"],
             conf_thresh=hyperparams["conf_thresh"],
-            nms_thresh=hyperparams["nms_thresh"]
+            nms_thresh=hyperparams["nms_thresh"],
+            run=run,
         )
         
     else:
         # train
-        save_folder = f"k-{args.k}_alpha-{args.alpha}_lambda-{args.lambda_disc}_lmmd-{args.lambda_mmd}"
-        save_dir = os.path.join(args.save, save_folder)
+        save_dir = create_save_dir(args)
         
         pathlib.Path(save_dir).mkdir(parents=True, exist_ok=True) 
         
@@ -109,7 +113,8 @@ def main(args, hyperparams, run):
             class_names=class_names,
             iou_thresh=hyperparams["iou_thresh"],
             conf_thresh=hyperparams["conf_thresh"],
-            nms_thresh=hyperparams["nms_thresh"]
+            nms_thresh=hyperparams["nms_thresh"],
+            run=run,
         )
         # save model weights
         save_name = f"ckpt_last_{datetime.today().strftime('%Y-%m-%d_%H-%M-%S')}.pth"
@@ -196,3 +201,13 @@ if __name__ == '__main__':
     # start run
     main(args, hyperparams, run)
 
+    # Test run
+    if not args.eval_only:
+        print("Running Test!")
+        args.eval_only = True
+        # Change to the new checkpoint
+        save_dir = create_save_dir(args)
+        args.pretrained_weights = os.path.join(save_dir,"ckpt_best_map.pth")
+        args.k = -1
+        print(f"args.k: {args.k}\targs.pretrained_weights: {args.pretrained_weights}\targs.eval_only: {args.eval_only}")
+        main(args, hyperparams, run)
