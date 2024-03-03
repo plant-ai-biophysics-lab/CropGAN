@@ -190,7 +190,7 @@ if __name__ == '__main__':
     }
 
     # update the run name with the domain
-    args.name = ("k-" + str(args.k) + "_a-" + str(args.alpha) + "_l-" + str(args.lambda_disc) + "_"
+    args.name = ("k-" + str(args.k) + "_a-" + str(args.alpha) + "_l-" + str(args.lambda_disc) + "_" + "lmmd-" + str(args.lambda_mmd)
                  + ("day" if "BordenDay" in args.train_path else "night" if "BordenNight" in args.train_path else "")
                  + "_" + args.name)
     if args.alpha == 0 and args.lambda_disc == 0:
@@ -205,11 +205,9 @@ if __name__ == '__main__':
 
     # Test run
     if not args.eval_only:
-        print("Running Test!")
         args.eval_only = True
         # Change to the new checkpoint
         save_dir = create_save_dir(args)
         args.pretrained_weights = os.path.join(save_dir,"ckpt_best_map.pth")
         args.k = -1
-        print(f"args.k: {args.k}\targs.pretrained_weights: {args.pretrained_weights}\targs.eval_only: {args.eval_only}")
         main(args, hyperparams, run)
