@@ -169,6 +169,8 @@ if __name__ == '__main__':
                     help="Whether to skip data preparation (use existing files)")
     ap.add_argument("--num-classes", type=int, default=1,
                     help="Number of classes in dataset")
+    ap.add_argument("--ckpt-to-test", type=str, default="ckpt_best_map",
+                    help="Which best checkpoint to use in test at end of training.")
     args = ap.parse_args()
 
     # hyperparams
