@@ -210,4 +210,9 @@ if __name__ == '__main__':
         save_dir = create_save_dir(args)
         args.pretrained_weights = os.path.join(save_dir,"ckpt_best_map.pth")
         args.k = -1
+        # Use test set, not val set
+        if args.target_val_path.split("/")[-2] == "valid":
+            args.target_val_path = os.path.join(os.path.dirname(os.path.dirname(args.target_val_path)),"test/images")
+        else:
+            print(f"Running test on target_val_path: {args.target_val_path}")
         main(args, hyperparams, run)
