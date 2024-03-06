@@ -33,6 +33,8 @@ def tensor_to_image(tensor):
 def generate_images_from_source(opt: argparse.Namespace, model: DoubleTaskCycleGanModel, run: wandb.run):
     if opt.image_path[-1] != "/":
         opt.image_path +="/"
+    if opt.out_path[-1] != "/":
+        opt.out_path +="/"
     synth_images = sorted(glob.glob(opt.image_path + "*.jpg"))  # deterministic for WandB
     print("Image path: ", opt.image_path)
     print("Number of synth input images: ", len(synth_images))
