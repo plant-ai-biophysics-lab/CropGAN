@@ -67,5 +67,5 @@ read -r -d '' standard_args << EOM
 --out_path $out_path
 EOM
 
-python -u train_cropgan.py --name BASELINE_k_32_day --reverse_task_k 32 --wandb_name $run_name --grl_alpha 0.0 --grl_lambda 0.0 --grl_lmmd 0.0 $standard_args
-python -u train_cropgan.py --name BEST_k_32_day --reverse_task_k 32 --wandb_name $run_name --grl_alpha 0.1 --grl_lambda 0.0001 --grl_lmmd 0.0005 $standard_args
+python -u train_cropgan.py --name BASELINE_k_32_day --reverse_task_k 32 --wandb_name BASELINE_k_32_day --grl_alpha 0.0 --grl_lambda 0.0 --grl_lmmd 0.0 $standard_args
+python -u train_cropgan.py --name BEST_k_32_day --reverse_task_k 32 --wandb_name BEST_k_32_day --grl_alpha 0.1 --grl_lambda 0.0001 --grl_lmmd 0.0005 $standard_args
