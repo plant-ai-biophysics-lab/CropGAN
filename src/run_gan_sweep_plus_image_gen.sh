@@ -36,11 +36,8 @@ mkdir -p $checkpoints_dir
 source_image_path="$dataroot/yolo_grl_data/BordenDay/source/train/images/"
 
 ## For Image Generation
-# Inside of checkpoints_dir, this is the specific directory for the run you want to use
-run_name="BASELINE_k_24_day"
-
 # Where you want the CropGAN generated images to go
-out_path="$dataroot/yolo_grl_data/BordenDay/cropgan_generated/$run_name"
+out_path="$dataroot/yolo_grl_data/BordenDay/cropgan_generated"
 
 # Weights used for yolo_a and yolo_b
 yolo_a_weights="$dataroot/yolo_grl_data/weights"
@@ -70,5 +67,5 @@ read -r -d '' standard_args << EOM
 --out_path $out_path
 EOM
 
-python -u train_cropgan.py --name $run_name --reverse_task_k 32 --wandb_name $run_name --grl_alpha 0.0 --grl_lambda 0.0 --grl_lmmd 0.0 $standard_args
-python -u train_cropgan.py --name $run_name --reverse_task_k 32 --wandb_name $run_name --grl_alpha 0.1 --grl_lambda 0.0001 --grl_lmmd 0.0005 $standard_args
+python -u train_cropgan.py --name BASELINE_k_32_day --reverse_task_k 32 --wandb_name $run_name --grl_alpha 0.0 --grl_lambda 0.0 --grl_lmmd 0.0 $standard_args
+python -u train_cropgan.py --name BEST_k_32_day --reverse_task_k 32 --wandb_name $run_name --grl_alpha 0.1 --grl_lambda 0.0001 --grl_lmmd 0.0005 $standard_args
