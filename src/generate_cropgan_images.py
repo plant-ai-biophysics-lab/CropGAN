@@ -48,8 +48,7 @@ def generate_images_from_source(opt: argparse.Namespace, model: DoubleTaskCycleG
             fake_img = model.netG_A(raw_img_tensor)
             fake_img_np = fake_img.detach().cpu().squeeze(0).permute([1, 2, 0]) * 0.5 + 0.5
             im = tensor_to_image(fake_img_np)
-            save_path = opt.out_path + img_path.split('/')[-1]
-            print("Saving at: ",save_path)
+            save_path = os.path.join(opt.out_path, opt.name, img_path.split('/')[-1])
             im.save(save_path)
 
             # log the synthetic & syn2real images to WandB
