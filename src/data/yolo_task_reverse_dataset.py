@@ -127,7 +127,7 @@ class YoloTaskReverseDataset(BaseDataset):
             self.transform_A, self.transform_B  = get_transform(self.opt, img_size=A_img.size, grayscale=(self.input_nc == 1))
             
             # Preprocess for A
-            A_label_path = A_path.replace("train", "label").replace(".png", ".txt").replace(".jpg", ".txt")
+            A_label_path = A_path.replace("train", "label").replace(".png", ".txt").replace(".jpg", ".txt").replace(".jpeg", ".txt")
             boxes = np.loadtxt(A_label_path).reshape(-1, 5)
             boxes = get_valid_box(boxes)
             boxes = torch.from_numpy(boxes)
@@ -163,7 +163,7 @@ class YoloTaskReverseDataset(BaseDataset):
 
 
             # Preprocess for labeled B
-            B_label_path = labeled_B_path.replace(".png", ".txt").replace(".jpg", ".txt")
+            B_label_path = labeled_B_path.replace(".png", ".txt").replace(".jpg", ".txt").replace(".jpeg", ".txt")
             boxes = np.loadtxt(B_label_path).reshape(-1, 5)
             boxes = get_valid_box(boxes)
             boxes = torch.from_numpy(boxes)
