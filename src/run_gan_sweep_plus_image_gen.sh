@@ -33,7 +33,7 @@ checkpoints_dir="$cropgan_dir/model_checkpoints/cyclegan/"
 mkdir -p $checkpoints_dir
 
 # Same as the training images for training yolo-uda: something like BordenNight/source/train/images
-source_image_path="$dataroot/yolo_grl_data/BordenDay/source/train/images"
+source_image_path="$dataroot/yolo_grl_data/BordenDay/source/train/images/"
 
 ## For Image Generation
 # Inside of checkpoints_dir, this is the specific directory for the run you want to use
