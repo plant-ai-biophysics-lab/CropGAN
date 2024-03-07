@@ -15,6 +15,10 @@ from trainer import train
 from validate import validate
 from datetime import datetime
 
+def create_save_dir(args):
+    save_folder = f"k-{args.k}_alpha-{args.alpha}_lambda-{args.lambda_disc}_lmmd-{args.lambda_mmd}"
+    save_dir = os.path.join(args.save, save_folder)
+    return save_dir
 
 def main(args, hyperparams, run):
     
@@ -82,13 +86,13 @@ def main(args, hyperparams, run):
             class_names = class_names,
             iou_thresh=hyperparams["iou_thresh"],
             conf_thresh=hyperparams["conf_thresh"],
-            nms_thresh=hyperparams["nms_thresh"]
+            nms_thresh=hyperparams["nms_thresh"],
+            run=run,
         )
         
     else:
         # train
-        save_folder = f"k-{args.k}_alpha-{args.alpha}_lambda-{args.lambda_disc}_lmmd-{args.lambda_mmd}"
-        save_dir = os.path.join(args.save, save_folder)
+        save_dir = create_save_dir(args)
         
         pathlib.Path(save_dir).mkdir(parents=True, exist_ok=True) 
         
@@ -110,7 +114,8 @@ def main(args, hyperparams, run):
             class_names=class_names,
             iou_thresh=hyperparams["iou_thresh"],
             conf_thresh=hyperparams["conf_thresh"],
-            nms_thresh=hyperparams["nms_thresh"]
+            nms_thresh=hyperparams["nms_thresh"],
+            run=run,
         )
         # save model weights
         save_name = f"ckpt_last_{datetime.today().strftime('%Y-%m-%d_%H-%M-%S')}.pth"
@@ -167,6 +172,8 @@ if __name__ == '__main__':
                     help="Whether to skip data preparation (use existing files)")
     ap.add_argument("--num-classes", type=int, default=1,
                     help="Number of classes in dataset")
+    ap.add_argument("--ckpt-to-test", type=str, default="ckpt_best_map",
+                    help="Which best checkpoint to use in test at end of training.")
     args = ap.parse_args()
 
     # hyperparams
@@ -186,8 +193,8 @@ if __name__ == '__main__':
     }
 
     # update the run name with the domain
-    args.name = ("k-" + str(args.k) + "_a-" + str(args.alpha) + "_l-" + str(args.lambda_disc) + "_"
-                 + "day" if "BordenDay" in args.train_path else "night" if "BordenNight" in args.train_path else ""
+    args.name = ("k-" + str(args.k) + "_a-" + str(args.alpha) + "_l-" + str(args.lambda_disc) + "_" + "lmmd-" + str(args.lambda_mmd)
+                 + "_" + ("day" if "BordenDay" in args.train_path else "night" if "BordenNight" in args.train_path else "")
                  + "_" + args.name)
     if args.alpha == 0 and args.lambda_disc == 0:
         args.name = "BASELINE_" + args.name
@@ -199,3 +206,16 @@ if __name__ == '__main__':
     # start run
     main(args, hyperparams, run)
 
+    # Test run
+    if not args.eval_only:
+        args.eval_only = True
+        # Change to the new checkpoint
+        save_dir = create_save_dir(args)
+        args.pretrained_weights = os.path.join(save_dir,"ckpt_best_map.pth")
+        args.k = -1
+        # Use test set, not val set
+        if args.target_val_path.split("/")[-2] == "valid":
+            args.target_val_path = os.path.join(os.path.dirname(os.path.dirname(args.target_val_path)),"test/images")
+        else:
+            print(f"Running test on target_val_path: {args.target_val_path}")
+        main(args, hyperparams, run)

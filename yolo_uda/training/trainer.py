@@ -173,6 +173,7 @@ def train(
     target_dataloader: DataLoader,
     validation_dataloader: DataLoader,
     save_dir: str,
+    run: wandb.run,
     lambda_discriminator: float = 0.5,
     lambda_mmd: float = 0.001,
     verbose: bool = False,

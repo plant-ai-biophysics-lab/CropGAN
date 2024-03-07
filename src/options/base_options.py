@@ -58,7 +58,7 @@ class BaseOptions():
         parser.add_argument('--random_view', type=float, default=0, help='random zoom from min crop size up to random_view, set to >=1 to enable, will disbale loadsize resize ')
         parser.add_argument('--eval_model', required=False, help='direct path to checkpoint of model be used')
         parser.add_argument('--yolo_evaluate_folder', type=str, default='None', help='the path to evaluate image file (label is the same pattern name) ')
-        parser.add_argument('--yolo_a_weights', type=str, default='', help='the location of trained yolo a network weights')
+        parser.add_argument('--yolo_a_weights', type=str, default='', help='the location of trained yolo a network weights, not the specific folder')
         parser.add_argument('--yolo_b_weights', type=str, default='', help='the location of trained yolo b network weights')
         parser.add_argument('--task_model_def', type=str, default='./config/yolov3.cfg', help='the location of trained yolo network definition')
         parser.add_argument('--yolo_img_size', type=int, default=416, help='the size of yolo net input')
@@ -70,6 +70,7 @@ class BaseOptions():
         parser.add_argument('--reverse_task_k', type=int, default=0, help='the number of labeled images from B to use during cyclegan training.')
         parser.add_argument("--grl_alpha", type=float, default=0.1, help="grl alpha and lambda")
         parser.add_argument("--grl_lambda", type=float, default=0.1, help="grl alpha and lambda")
+        parser.add_argument("--grl_lmmd", type=float, default=0.0, help="grl lambda mmd")
         # Logging parameters
         parser.add_argument("--wandb_name", type=str, default="default-cropgan-run", help="Name of the wandb run")
 
