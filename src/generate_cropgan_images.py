@@ -35,7 +35,7 @@ def generate_images_from_source(opt: argparse.Namespace, model: DoubleTaskCycleG
         opt.image_path +="/"
     if opt.out_path[-1] != "/":
         opt.out_path +="/"
-    synth_images = sorted(glob.glob(opt.image_path + "*.jpg"))  # deterministic for WandB
+    synth_images = sorted([file for extension in ['*.jpg', '*.png', '*.jpeg'] for file in glob.glob(opt.image_path + extension)])
     print("Image path: ", opt.image_path)
     print("Number of synth input images: ", len(synth_images))
 

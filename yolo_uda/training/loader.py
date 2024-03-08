@@ -86,7 +86,7 @@ def prepare_data(train_path, target_train_path, target_val_path, K=0, skip_prepa
             print(f"File paths have been saved to {fname}")
 
         
-def _create_data_loader(img_path, batch_size, img_size, n_cpu, multiscale_training=False):
+def _create_data_loader(img_path, batch_size, img_size, n_cpu, label_path=None, multiscale_training=False):
     """Creates a DataLoader for training.
 
     :param img_path: Path to file containing all paths to training images.
@@ -104,6 +104,7 @@ def _create_data_loader(img_path, batch_size, img_size, n_cpu, multiscale_traini
     """
     dataset = UDAListDataset(
         img_path,
+        label_path=label_path,
         img_size=img_size,
         multiscale=multiscale_training,
         transform=AUGMENTATION_TRANSFORMS)
@@ -119,7 +120,7 @@ def _create_data_loader(img_path, batch_size, img_size, n_cpu, multiscale_traini
     return dataloader
 
 
-def _create_validation_data_loader(img_path, batch_size, img_size, n_cpu):
+def _create_validation_data_loader(img_path, batch_size, img_size, n_cpu, label_path=None):
     """
     Creates a DataLoader for validation.
 
@@ -134,7 +135,12 @@ def _create_validation_data_loader(img_path, batch_size, img_size, n_cpu):
     :return: Returns DataLoader
     :rtype: DataLoader
     """
-    dataset = UDAListDataset(img_path, img_size=img_size, multiscale=False, transform=DEFAULT_TRANSFORMS)
+    dataset = UDAListDataset(
+        img_path, 
+        label_path=label_path, 
+        img_size=img_size, 
+        multiscale=False, 
+        transform=DEFAULT_TRANSFORMS)
     dataloader = DataLoader(
         dataset,
         batch_size=batch_size,
