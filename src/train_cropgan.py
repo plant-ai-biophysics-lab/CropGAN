@@ -41,7 +41,8 @@ if __name__ == '__main__':
     # speed up life
     # (auto-detect checkpoint location based on the given alpha/lambda, and search
     #  within the respective folder for the latest `ckpt_last_*.pth` model file).
-    opt.yolo_b_weights = opt.yolo_a_weights
+    if opt.yolo_b_weights == '':
+        opt.yolo_b_weights = opt.yolo_a_weights
     if os.path.isdir(opt.yolo_a_weights):
         possible_weight_path = os.path.join(
             opt.yolo_a_weights, f"k-{opt.reverse_task_k}_alpha-{opt.grl_alpha}_lambda-{opt.grl_lambda}_lmmd-{opt.grl_lmmd}", "ckpt_best_map.pth")
