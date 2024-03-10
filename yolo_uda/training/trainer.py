@@ -101,7 +101,7 @@ def discriminator_step(
     """ 
     Discriminator step performed between the source and targer domain. 
     Input arguments:
-      map_features: Tensor = feture map obtained from the feature extractor
+      map_features: Tensor = feature map obtained from the feature extractor
       labels: Tensor = ground truth
     Return:
       Tensor = cross entropy loss between the prediction and the ground truth.
@@ -122,41 +122,36 @@ def compose_discriminator_batch(source_features: torch.Tensor, target_features: 
                                 mini_batch_size: int, downsample_2: nn.Module, downsample_4: nn.Module,
                                 labels_source: torch.Tensor, labels_target: torch.Tensor,
                                 device: torch.device, shuffle: bool = True):
-    # source_features[0] = upsample_4(source_features[0])
-    # source_features[1] = upsample_2(source_features[1])
-    source_features[1] = downsample_2(source_features[1])
+    # source_features[1] = downsample_2(source_features[1])
+    # target_features[1] = downsample_2(target_features[1])
 
     # only used for yolov3.cfg, not yolov3-tiny.cfg
     if len(source_features) == 3:
         source_features[2] = downsample_4(source_features[2])
-    
-    # run target pass upsample features
-    zeros_label = torch.zeros(mini_batch_size, dtype=torch.long, device=device)
-    ones_label = torch.ones(mini_batch_size, dtype=torch.long, device=device)
-
-    target_features[1] = downsample_2(target_features[1])
     # only used for yolov3.cfg, not yolov3-tiny.cfg
     if len(target_features) == 3:
         target_features[2] = downsample_4(target_features[2])
     
-    # concatenate source and target features
-    source_features = torch.stack(source_features).sum(axis=0)
-    target_features = torch.stack(target_features).sum(axis=0)
-    wandb.log({
-        'features_mean': source_features.mean(),
-        'features_max': source_features.max(),
-        'features_min': source_features.min(),
-    }, commit=False)
+    # Create pixel-wise labels
+    activation_dims = (source_features[1].shape[2], source_features[1].shape[3], 1)
+    labels_source_pixelwise = labels_source.repeat(activation_dims).permute(2,0,1)
+    labels_target_pixelwise = labels_target.repeat(activation_dims).permute(2,0,1)
 
     # Combine source and target batches for discriminator
-    features = torch.cat([source_features, target_features],axis=0).to(device)
-    labels = torch.cat([labels_source, labels_target],axis=0).to(device)
+    features = {
+        "global_features":torch.cat([source_features[0], target_features[0]],axis=0).to(device),
+        "local_features":torch.cat([source_features[1], target_features[1]],axis=0).to(device)
+        }
+    labels = {
+        "global_labels": torch.cat([labels_source, labels_target],axis=0).to(device),
+        "local_labels": torch.cat([labels_source_pixelwise, labels_target_pixelwise],axis=0).to(device)
+        }
     
     if shuffle:
         # Shuffle batch
-        idx = torch.randperm(features.shape[0])
-        features_shuffled = features[idx]
-        labels_shuffled = labels[idx]
+        idx = torch.randperm(features['global_features'].shape[0])
+        features_shuffled = {key:value[idx] for key,value in features.items()}
+        labels_shuffled = {key:value[idx] for key,value in labels.items()}
         return features_shuffled, labels_shuffled
     return features, labels
     
@@ -259,6 +254,7 @@ def train(
                 labels_target=labels_target,
                 device=device)
             
+            # 2 steps: 1 global, 1 local
             discriminator_loss, batch_discriminator_acc = discriminator_step(discriminator, features, labels, 2*mini_batch_size, discriminator_loss_function)
 
             # Calculate average MMD loss per batch
