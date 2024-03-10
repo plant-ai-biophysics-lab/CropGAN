@@ -1,5 +1,6 @@
 import os
 from datetime import datetime
+from typing import Callable, Union, Dict, List, Any 
 
 import torch
 import tqdm
@@ -11,17 +12,12 @@ from terminaltables import AsciiTable
 from torch.utils.data import DataLoader
 from torch.autograd import Variable
 from torchmetrics.classification import BinaryAccuracy
-from torchvision.ops import sigmoid_focal_loss
 from pytorchyolo.utils.loss import compute_loss
 from pytorchyolo.utils.utils import to_cpu, ap_per_class, get_batch_statistics, non_max_suppression, xywh2xyxy
 from models import Upsample
 from metrics import FeatureMapCosineSimilarity, FeatureMapEuclideanDistance, MMDLoss, RBF
 
 
-# for loss calculations
-# cross_entropy = nn.CrossEntropyLoss()
-# bce = nn.BCELoss()
-global_disc_loss = sigmoid_focal_loss(alpha=-1, gamma=3, reduction='mean')
 binary_accuracy = BinaryAccuracy(threshold=0.5).to('cuda')
 
 def print_eval_stats(metrics_output, class_names, verbose):
@@ -98,7 +94,8 @@ def discriminator_step(
       discriminator,
       map_features, 
       labels,
-      mini_batch_size
+      mini_batch_size,
+      discriminator_loss_function,
     ) -> None:
 
     """ 
@@ -116,7 +113,7 @@ def discriminator_step(
     
     # calculate loss
     # discriminator_loss = cross_entropy(outputs, labels.float())
-    discriminator_loss = global_disc_loss(outputs, labels.float())
+    discriminator_loss = discriminator_loss_function(outputs, labels.float())
     
     return discriminator_loss, discriminator_acc
 
@@ -174,6 +171,7 @@ def train(
     mini_batch_size: int,
     target_dataloader: DataLoader,
     validation_dataloader: DataLoader,
+    discriminator_loss_function: Union[Callable, nn.Module],
     save_dir: str,
     run: wandb.run,
     lambda_discriminator: float = 0.5,
@@ -260,7 +258,7 @@ def train(
                 labels_target=labels_target,
                 device=device)
             
-            discriminator_loss, batch_discriminator_acc = discriminator_step(discriminator, features, labels, 2*mini_batch_size)
+            discriminator_loss, batch_discriminator_acc = discriminator_step(discriminator, features, labels, 2*mini_batch_size, discriminator_loss_function)
 
             # Calculate average MMD loss per batch
             mmd_loss = mmd_metric(source_features[1], target_features[1])

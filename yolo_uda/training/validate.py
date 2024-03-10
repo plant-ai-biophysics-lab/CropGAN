@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Callable, Union
 import torch
 import tqdm
 import wandb
@@ -101,6 +101,7 @@ def validate(
     verbose: Optional[bool] = False,
     epochs: Optional[int] = 10,
     evaluate_interval: Optional[int] = 1,
+    discriminator_loss_function: Union[Callable, nn.Module] = None
 ):
     
     print("\n---- Evaluating Model ----")

@@ -2,9 +2,11 @@ import argparse
 import wandb
 import os
 import pathlib
+from functools import partial
 
 import torch
 import torch.optim as optim
+from torchvision.ops import sigmoid_focal_loss
 from PIL import Image
 from torchvision import transforms
 # from pytorchyolo.test import _create_validation_data_loader
@@ -96,6 +98,16 @@ def main(args, hyperparams, run):
         
         pathlib.Path(save_dir).mkdir(parents=True, exist_ok=True) 
         
+        # Loss functions
+        # for loss calculations
+        # cross_entropy = nn.CrossEntropyLoss()
+        if args.disc_loss_func == "focal":
+            disc_loss_func = partial(sigmoid_focal_loss, alpha=-1, gamma=3, reduction='mean') 
+        elif args.disc_loss_func == "focal":
+            disc_loss_func = torch.nn.BCELoss()
+        else:
+            raise ValueError(f"disc loss func can only be bce or focal, received {args.disc_loss_func}.")
+        
         model = train(
             model=model,
             discriminator=discriminator,
@@ -108,6 +120,7 @@ def main(args, hyperparams, run):
             validation_dataloader=validation_dataloader,
             lambda_discriminator=args.lambda_disc,
             lambda_mmd=args.lambda_mmd,
+            discriminator_loss_function=disc_loss_func,
             verbose=args.verbose,
             epochs=args.epochs,
             save_dir=save_dir,
@@ -140,6 +153,8 @@ if __name__ == '__main__':
                     help="Learning rate for discriminator")
     ap.add_argument("--decay-disc", type=float, default=0.0001,
                     help="Weight decay for discriminator")
+    ap.add_argument("--disc-loss-func", type=str, default="focal",
+                    help="Should be `focal` or `bce`.")
     ap.add_argument("-b", "--batch-size", type=int, default=2,
                     help="Number of samples per batch.")
     ap.add_argument("-t", "--train-path", required=True,
@@ -188,6 +203,7 @@ if __name__ == '__main__':
         "lambda": args.lambda_disc,
         "lambda_mmd": args.lambda_mmd,
         "decay_disc": args.decay_disc,
+        "disc_loss_func": args.disc_loss_func,
         "k": args.k,
         "img_size": 416,
         "batch_size": args.batch_size,
