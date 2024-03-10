@@ -1,8 +1,9 @@
 import argparse
-import wandb
+import glob
 import os
 import pathlib
 
+import wandb
 import torch
 import torch.optim as optim
 from PIL import Image
@@ -78,6 +79,15 @@ def main(args, hyperparams, run):
     )
 
     if args.eval_only:
+        # Pull out metrics suffix
+        if args.pretrained_weights is not None:
+            if args.pretrained_weights.endswith("ckpt_best_map.pth"):
+                metrics_suffix = "ckpt_best_map"
+            elif "ckpt_last" in args.pretrained_weights:
+                metrics_suffix = "ckpt_last"
+            else:
+                metrics_suffix = ""
+
         # validate
         model = validate(
             model = model,
@@ -88,6 +98,7 @@ def main(args, hyperparams, run):
             conf_thresh=hyperparams["conf_thresh"],
             nms_thresh=hyperparams["nms_thresh"],
             run=run,
+            metrics_suffix = metrics_suffix
         )
         
     else:
@@ -209,16 +220,33 @@ if __name__ == '__main__':
     # start run
     main(args, hyperparams, run)
 
-    # Test run
+    # Test runs: best mAP checkpoint
     if not args.eval_only:
         args.eval_only = True
         # Change to the new checkpoint
         save_dir = create_save_dir(args)
         args.pretrained_weights = os.path.join(save_dir,"ckpt_best_map.pth")
-        args.k = -1
+        args.limit_val_size = False
         # Use test set, not val set
         if args.target_val_path.split("/")[-2] == "valid":
             args.target_val_path = os.path.join(os.path.dirname(os.path.dirname(args.target_val_path)),"test/images")
         else:
             print(f"Running test on target_val_path: {args.target_val_path}")
+        main(args, hyperparams, run)
+
+        # Test run: last checkpoint
+        weight_files = glob.glob(os.path.join(save_dir,"ckpt_last_*.pth"))
+
+        latest_weight, latest_time = "", datetime(2024, 1, 1)
+        for weight_file in weight_files:
+            print(weight_file)
+            weight_time = "_".join(os.path.splitext(os.path.basename(weight_file))[0].split("_")[-2:])
+            weight_time = datetime.strptime(weight_time, '%Y-%m-%d_%H-%M-%S')
+            if weight_time > latest_time:
+                latest_weight, latest_time = weight_file, weight_time
+
+        if latest_weight == "":
+            raise FileNotFoundError(f"No weights found at {save_dir}")
+
+        args.pretrained_weights = latest_weight
         main(args, hyperparams, run)
