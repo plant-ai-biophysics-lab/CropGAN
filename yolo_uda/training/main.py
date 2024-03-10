@@ -103,7 +103,7 @@ def main(args, hyperparams, run):
         # cross_entropy = nn.CrossEntropyLoss()
         if args.disc_loss_func == "focal":
             disc_loss_func = partial(sigmoid_focal_loss, alpha=-1, gamma=3, reduction='mean') 
-        elif args.disc_loss_func == "focal":
+        elif args.disc_loss_func == "bce":
             disc_loss_func = torch.nn.BCELoss()
         else:
             raise ValueError(f"disc loss func can only be bce or focal, received {args.disc_loss_func}.")
