@@ -28,7 +28,7 @@ def prepare_data(train_path, target_train_path, target_val_path, K=0, skip_prepa
         return
 
     # K_val is determined by k per CropGAN paper.   
-    if K in K_VAL_MAP:
+    if K in K_VAL_MAP and limit_val_size:
         K_val = K_VAL_MAP[K]
     elif limit_val_size:
         # For Gemini if we use a different k value than in paper.
