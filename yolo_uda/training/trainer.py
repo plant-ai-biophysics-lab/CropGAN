@@ -182,6 +182,7 @@ def train(
     iou_thresh: float = 0.5,
     conf_thresh: float = 0.5,
     nms_thresh: float = 0.5,
+    metric_suffix: str = "", # Not used, just mirrors validate interface
 ):
     # upsample_4 = Upsample(scale_factor=4, mode="nearest")
     # upsample_2 = Upsample(scale_factor=2, mode="nearest")
