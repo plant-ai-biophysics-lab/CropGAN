@@ -22,7 +22,7 @@ K_VAL_MAP = {
     58:15
 }
 
-def prepare_data(train_path, target_train_path, target_val_path, K=0, skip_preparation=False):
+def prepare_data(train_path, target_train_path, target_val_path, K=0, skip_preparation=False, limit_val_size=False):
     if skip_preparation:
         print("Skipping file preparation")
         return
@@ -30,9 +30,12 @@ def prepare_data(train_path, target_train_path, target_val_path, K=0, skip_prepa
     # K_val is determined by k per CropGAN paper.   
     if K in K_VAL_MAP:
         K_val = K_VAL_MAP[K]
-    else:
+    elif limit_val_size:
         # For Gemini if we use a different k value than in paper.
         K_val = max(1,int(0.25*K))
+    else:
+        # Use all val images
+        K_val = 1e6
 
     # create list to store file paths
     paths = [target_train_path, target_val_path, train_path]

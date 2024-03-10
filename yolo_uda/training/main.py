@@ -29,7 +29,7 @@ def main(args, hyperparams, run):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
     # prepare data
-    prepare_data(args.train_path, args.target_train_path, args.target_val_path, args.k, args.skip_preparation)
+    prepare_data(args.train_path, args.target_train_path, args.target_val_path, args.k, args.skip_preparation, args.limit_val_size)
     
     # load models
     model = load_model(args.config, args.pretrained_weights).to(device)
@@ -174,6 +174,8 @@ if __name__ == '__main__':
                     help="Number of classes in dataset")
     ap.add_argument("--ckpt-to-test", type=str, default="ckpt_best_map",
                     help="Which best checkpoint to use in test at end of training.")
+    ap.add_argument("--limit-val-size", action="store_true", default=False,
+                    help="If flag is passed, val set will be ~k/4, per CropGAN methodology.")
     args = ap.parse_args()
 
     # hyperparams
@@ -190,6 +192,7 @@ if __name__ == '__main__':
         "img_size": 416,
         "batch_size": args.batch_size,
         "learning_rate_disc": args.lr_disc,
+        "limit_val_size": args.limit_val_size,
     }
 
     # update the run name with the domain
