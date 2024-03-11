@@ -98,17 +98,15 @@ class _GradientReversal(torch.autograd.Function):
         }, commit=False)
         return -ctx.alpha * grad_output, None
 
-# class GlobalDiscriminator(nn.Module):
-class Discriminator(nn.Module):
+class GlobalDiscriminator(nn.Module):
     """
     A 3-layer MLP + Gradient Reversal Layer for domain classification.
     """
 
-    def __init__(self, in_size=255, h=2048, out_size=1, alpha=1.0):
+    def __init__(self, in_size=255, out_size=1, alpha=1.0):
         """
         Arguments:
             in_size: size of the input
-            h: hidden layer size
             out_size: size of the output
             alpha: grl constant
         """
@@ -130,15 +128,6 @@ class Discriminator(nn.Module):
             nn.Linear(128, out_size),
             nn.Sigmoid()
         )
-        # self.net = nn.Sequential(
-        #     GradientReversal(alpha=alpha),
-        #     nn.Linear(in_size, h),
-        #     nn.ReLU(),
-        #     nn.Linear(h, h),
-        #     nn.ReLU(),
-        #     nn.Linear(h, out_size),
-        #     nn.Sigmoid()
-        # )
 
     def forward(self, x):
         return self.net(x).squeeze(-1)
@@ -150,11 +139,10 @@ class LocalDiscriminator(nn.Module):
     A 3-layer MLP + Gradient Reversal Layer for domain classification.
     """
 
-    def __init__(self, in_size=255, h=2048, out_size=1, alpha=1.0):
+    def __init__(self, in_size=255, alpha=1.0):
         """
         Arguments:
             in_size: size of the input
-            h: hidden layer size
             out_size: size of the output
             alpha: grl constant
         """
@@ -172,7 +160,7 @@ class LocalDiscriminator(nn.Module):
         )
 
     def forward(self, x):
-        return self.net(x).squeeze(-1)
+        return self.net(x).squeeze(1)
         # return self.net(torch.flatten(x,1)).squeeze(-1)
 
 
