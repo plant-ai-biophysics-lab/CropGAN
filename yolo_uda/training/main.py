@@ -60,8 +60,13 @@ def main(args, hyperparams, run):
         multiscale_training=False
     )
     
+    if args.limit_val_size:
+        val_filename = f"/target_val_k_{args.k}.txt"
+    else:
+        val_filename = f"/target_val_k_-1.txt"
+
     validation_dataloader = _create_validation_data_loader(
-        os.path.dirname(args.target_val_path)+f"/target_val_k_{args.k}.txt",
+        os.path.dirname(args.target_val_path)+val_filename,
         batch_size=1,
         img_size=hyperparams['img_size'],
         n_cpu=args.n_cpu
