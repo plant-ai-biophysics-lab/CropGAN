@@ -96,7 +96,8 @@ def discriminator_step(
       map_features, 
       labels,
       mini_batch_size,
-      discriminator_loss_function,
+      global_discriminator_loss_function,
+      local_discriminator_loss_function
     ) -> None:
 
     """ 
@@ -107,16 +108,19 @@ def discriminator_step(
     Return:
       Tensor = cross entropy loss between the prediction and the ground truth.
     """
-    outputs = global_discriminator(map_features['global_features'])
+    global_outputs = global_discriminator(map_features['global_features'])
+    local_outputs = local_discriminator(map_features['local_features'])
     
     # calculate accuracy
-    discriminator_acc = binary_accuracy(outputs, labels['global_labels'])
+    global_discriminator_acc = binary_accuracy(global_outputs, labels['global_labels'])
+    local_discriminator_acc = binary_accuracy(local_outputs, labels['local_labels'])
+    discriminator_acc = {"global_discriminator_acc":global_discriminator_acc, "local_discriminator_acc":local_discriminator_acc}
     
     # calculate loss
-    # discriminator_loss = cross_entropy(outputs, labels.float())
-    discriminator_loss = discriminator_loss_function(outputs, labels['global_labels'].float())
+    global_discriminator_loss = global_discriminator_loss_function(global_outputs, labels['global_labels'].float())
+    local_discriminator_loss = local_discriminator_loss_function(local_outputs, labels['local_labels'].float())
     
-    return discriminator_loss, discriminator_acc
+    return global_discriminator_loss, local_discriminator_loss, discriminator_acc
 
 
 def compose_discriminator_batch(source_features: torch.Tensor, target_features: torch.Tensor,
@@ -160,10 +164,12 @@ def compose_discriminator_batch(source_features: torch.Tensor, target_features: 
 def train(
     model: nn.Module,
     global_discriminator: nn.Module,
+    local_discriminator: nn.Module,
     source_dataloader: DataLoader,
     device: torch.device,
     optimizer: torch.optim.Optimizer,
     optimizer_global_classifier: torch.optim.Optimizer,
+    optimizer_local_classifier: torch.optim.Optimizer,
     mini_batch_size: int,
     target_dataloader: DataLoader,
     validation_dataloader: DataLoader,
@@ -197,12 +203,13 @@ def train(
         # set to training mode
         model.train() # set yolo model to training mode
         global_discriminator.train() # set discriminator to training mode
-
+        local_discriminator.train()
         # Collect discriminator accuracy over training batches
         # Note: total is the sum of batch-level accuracy, not sample-level accuracy. 
         # To get the average for the dataset, divide by the batch count.
-        discriminator_acc = {"total": 0, "batch_count": 0, "batch_size": mini_batch_size*2}
-        
+        global_discriminator_acc = {"total": 0, "batch_count": 0, "batch_size": mini_batch_size*2}
+        local_discriminator_acc = {"total": 0, "batch_count": 0, "batch_size": mini_batch_size*2}
+       
         ## Feature map similarity metrics
         # Cosine similarity metrics
         cosine_similarity_metrics_l15 = FeatureMapCosineSimilarity(layer="15")
@@ -226,6 +233,7 @@ def train(
             # Reset gradients
             optimizer.zero_grad()
             optimizer_global_classifier.zero_grad()
+            optimizer_local_classifier.zero_grad()
 
             batches_done = len(target_dataloader) * (epoch-1) + batch_i
 
@@ -255,20 +263,22 @@ def train(
                 labels_target=labels_target,
                 device=device)
             
-            # 2 steps: 1 global, 1 local
-            discriminator_loss, batch_discriminator_acc = discriminator_step(
+            # discriminator_step hanldes both global and local
+            global_discriminator_loss, local_discriminator_loss, batch_discriminator_acc = discriminator_step(
                 global_discriminator=global_discriminator, 
-                local_discriminator=None, 
+                local_discriminator=local_discriminator, 
                 map_features=features, 
                 labels=labels, 
                 mini_batch_size=2*mini_batch_size, 
-                discriminator_loss_function=discriminator_loss_function
+                global_discriminator_loss_function=discriminator_loss_function,
+                local_discriminator_loss_function=nn.MSELoss()
             )
 
             # Calculate average MMD loss per batch
             mmd_loss = mmd_metric(source_features[1], target_features[1])
 
             # run backward propagation
+            discriminator_loss = 0.5 * (global_discriminator_loss + local_discriminator_loss)
             loss = yolo_loss + lambda_discriminator * discriminator_loss + lambda_mmd * mmd_loss
             loss.backward()
 
@@ -312,11 +322,14 @@ def train(
             # Run optimizer
             optimizer.step()
             optimizer_global_classifier.step()
+            optimizer_local_classifier.step()
 
             # Metrics
             # Track discriminator accuracy
-            discriminator_acc["total"] += batch_discriminator_acc
-            discriminator_acc["batch_count"] += 1
+            global_discriminator_acc["total"] += batch_discriminator_acc["global_discriminator_acc"]
+            global_discriminator_acc["batch_count"] += 1
+            local_discriminator_acc["total"] += batch_discriminator_acc["local_discriminator_acc"]
+            local_discriminator_acc["batch_count"] += 1
 
             # Update cosine similarity metrics
             # *_features[0] and *_features[1] are the feature maps of different yolo layers.
@@ -345,14 +358,15 @@ def train(
                 "obj_loss": float(loss_components[1]),
                 "cls_loss": float(loss_components[2]),
                 "yolo_loss": float(loss_components[3]),
-                # "dscm_acc": float(discriminator_acc),
-                "dscm_loss": float(discriminator_loss)
+                "glob_dscm_loss": float(global_discriminator_loss),
+                "loc_dscm_loss": float(local_discriminator_loss)
             }, step=batches_done)
             model.seen += imgs_s.size(0)
 
         # Training epoch metrics
         # Discriminator accuracy
-        wandb.log({"dscm_acc": discriminator_acc["total"] / discriminator_acc["batch_count"]}, step=batches_done)
+        wandb.log({"glob_dscm_acc": global_discriminator_acc["total"] / global_discriminator_acc["batch_count"]}, step=batches_done)
+        wandb.log({"loc_dscm_acc": local_discriminator_acc["total"] / local_discriminator_acc["batch_count"]}, step=batches_done)
         
         # Average cosine similarity within source, within target, and across source-target
         # For both feature layers
