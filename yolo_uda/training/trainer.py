@@ -91,7 +91,8 @@ def _evaluate(model, dataloader, class_names, img_size, iou_thres, conf_thres, n
     return metrics_output
 
 def discriminator_step(
-      discriminator,
+      global_discriminator,
+      local_discriminator,
       map_features, 
       labels,
       mini_batch_size,
@@ -106,14 +107,14 @@ def discriminator_step(
     Return:
       Tensor = cross entropy loss between the prediction and the ground truth.
     """
-    outputs = discriminator(map_features)
+    outputs = global_discriminator(map_features['global_features'])
     
     # calculate accuracy
-    discriminator_acc = binary_accuracy(outputs, labels)
+    discriminator_acc = binary_accuracy(outputs, labels['global_labels'])
     
     # calculate loss
     # discriminator_loss = cross_entropy(outputs, labels.float())
-    discriminator_loss = discriminator_loss_function(outputs, labels.float())
+    discriminator_loss = discriminator_loss_function(outputs, labels['global_labels'].float())
     
     return discriminator_loss, discriminator_acc
 
@@ -158,11 +159,11 @@ def compose_discriminator_batch(source_features: torch.Tensor, target_features: 
 
 def train(
     model: nn.Module,
-    discriminator: nn.Module,
+    global_discriminator: nn.Module,
     source_dataloader: DataLoader,
     device: torch.device,
     optimizer: torch.optim.Optimizer,
-    optimizer_classifier: torch.optim.Optimizer,
+    optimizer_global_classifier: torch.optim.Optimizer,
     mini_batch_size: int,
     target_dataloader: DataLoader,
     validation_dataloader: DataLoader,
@@ -195,7 +196,7 @@ def train(
 
         # set to training mode
         model.train() # set yolo model to training mode
-        discriminator.train() # set discriminator to training mode
+        global_discriminator.train() # set discriminator to training mode
 
         # Collect discriminator accuracy over training batches
         # Note: total is the sum of batch-level accuracy, not sample-level accuracy. 
@@ -224,7 +225,7 @@ def train(
 
             # Reset gradients
             optimizer.zero_grad()
-            optimizer_classifier.zero_grad()
+            optimizer_global_classifier.zero_grad()
 
             batches_done = len(target_dataloader) * (epoch-1) + batch_i
 
@@ -255,7 +256,14 @@ def train(
                 device=device)
             
             # 2 steps: 1 global, 1 local
-            discriminator_loss, batch_discriminator_acc = discriminator_step(discriminator, features, labels, 2*mini_batch_size, discriminator_loss_function)
+            discriminator_loss, batch_discriminator_acc = discriminator_step(
+                global_discriminator=global_discriminator, 
+                local_discriminator=None, 
+                map_features=features, 
+                labels=labels, 
+                mini_batch_size=2*mini_batch_size, 
+                discriminator_loss_function=discriminator_loss_function
+            )
 
             # Calculate average MMD loss per batch
             mmd_loss = mmd_metric(source_features[1], target_features[1])
@@ -303,7 +311,7 @@ def train(
                 
             # Run optimizer
             optimizer.step()
-            optimizer_classifier.step()
+            optimizer_global_classifier.step()
 
             # Metrics
             # Track discriminator accuracy
