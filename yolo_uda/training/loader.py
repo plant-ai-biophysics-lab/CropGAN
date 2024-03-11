@@ -76,8 +76,11 @@ def prepare_data(train_path, target_train_path, target_val_path, K=0, skip_prepa
     # write to txt file if doesn't exist
     train_output = os.path.join(os.path.dirname(train_path), f'train_k_{K}.txt')
     target_train_output = os.path.join(os.path.dirname(target_train_path), 'target_train.txt')
-    target_val_output = os.path.join(os.path.dirname(target_val_path), f'target_val_k_{K}.txt')
-    
+    if limit_val_size:
+        target_val_output = os.path.join(os.path.dirname(target_val_path), f'target_val_k_{K}.txt')
+    else:
+        target_val_output = os.path.join(os.path.dirname(target_val_path), f'target_val_k_-1.txt')
+
     for fname, sample_locs, paths in zip(
             [train_output, target_train_output, target_val_output],
             [sample_loc_train, sample_loc_target_train, sample_loc_target_val],
