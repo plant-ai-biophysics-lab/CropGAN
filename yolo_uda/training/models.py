@@ -152,8 +152,10 @@ class LocalDiscriminator(nn.Module):
         self.net = nn.Sequential(
             GradientReversal(alpha=alpha),
             nn.Conv2d(in_channels=in_size, out_channels=256, kernel_size=1, stride=1, bias=False),
+            nn.BatchNorm2d(num_features=256),
             nn.ReLU(),
             nn.Conv2d(in_channels=256, out_channels=128, kernel_size=1, stride=1, bias=False),
+            nn.BatchNorm2d(num_features=128),
             nn.ReLU(),
             nn.Conv2d(in_channels=128, out_channels=1, kernel_size=1, stride=1, bias=False),
             nn.Sigmoid()
