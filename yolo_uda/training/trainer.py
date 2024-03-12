@@ -278,7 +278,7 @@ def train(
             mmd_loss = mmd_metric(source_features[1], target_features[1])
 
             # run backward propagation
-            discriminator_loss = 0.5 * (global_discriminator_loss + local_discriminator_loss)
+            discriminator_loss = 0.8 * global_discriminator_loss + 0.2 * local_discriminator_loss
             loss = yolo_loss + lambda_discriminator * discriminator_loss + lambda_mmd * mmd_loss
             loss.backward()
 
