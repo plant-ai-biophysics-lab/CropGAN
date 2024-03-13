@@ -22,17 +22,20 @@ K_VAL_MAP = {
     58:15
 }
 
-def prepare_data(train_path, target_train_path, target_val_path, K=0, skip_preparation=False):
+def prepare_data(train_path, target_train_path, target_val_path, K=0, skip_preparation=False, limit_val_size=False):
     if skip_preparation:
         print("Skipping file preparation")
         return
 
     # K_val is determined by k per CropGAN paper.   
-    if K in K_VAL_MAP:
+    if K in K_VAL_MAP and limit_val_size:
         K_val = K_VAL_MAP[K]
-    else:
+    elif limit_val_size:
         # For Gemini if we use a different k value than in paper.
         K_val = max(1,int(0.25*K))
+    else:
+        # Use all val images
+        K_val = 1e6
 
     # create list to store file paths
     paths = [target_train_path, target_val_path, train_path]
@@ -73,8 +76,11 @@ def prepare_data(train_path, target_train_path, target_val_path, K=0, skip_prepa
     # write to txt file if doesn't exist
     train_output = os.path.join(os.path.dirname(train_path), f'train_k_{K}.txt')
     target_train_output = os.path.join(os.path.dirname(target_train_path), 'target_train.txt')
-    target_val_output = os.path.join(os.path.dirname(target_val_path), f'target_val_k_{K}.txt')
-    
+    if limit_val_size:
+        target_val_output = os.path.join(os.path.dirname(target_val_path), f'target_val_k_{K}.txt')
+    else:
+        target_val_output = os.path.join(os.path.dirname(target_val_path), f'target_val_k_-1.txt')
+
     for fname, sample_locs, paths in zip(
             [train_output, target_train_output, target_val_output],
             [sample_loc_train, sample_loc_target_train, sample_loc_target_val],
