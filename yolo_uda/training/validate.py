@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Callable, Union
 import torch
 import tqdm
 import wandb
@@ -90,6 +90,7 @@ def validate(
     iou_thresh: float = 0.5,
     conf_thresh: float = 0.5,
     nms_thresh: float = 0.5,
+    metrics_suffix: Optional[str] = "",
     # The rest are here so that the train() and validate() interfaces are the same
     discriminator: Optional[nn.Module] = None,
     source_dataloader: Optional[DataLoader] = None,
@@ -101,7 +102,7 @@ def validate(
     verbose: Optional[bool] = False,
     epochs: Optional[int] = 10,
     evaluate_interval: Optional[int] = 1,
-    metrics_suffix: Optional[str] = "",
+    discriminator_loss_function: Union[Callable, nn.Module] = None
 ):
     
     print("\n---- Evaluating Model ----")
