@@ -13,7 +13,7 @@ from torchvision import transforms
 # from pytorchyolo.test import _create_validation_data_loader
 
 from loader import prepare_data, _create_data_loader, _create_validation_data_loader
-from models import load_model, Discriminator, Upsample
+from models import load_model, GlobalDiscriminator, LocalDiscriminator, Upsample
 from trainer import train
 from validate import validate
 from datetime import datetime
@@ -37,8 +37,9 @@ def main(args, hyperparams, run):
     # load models
     model = load_model(args.config, args.pretrained_weights).to(device)
     wandb.config.update(model.hyperparams)
-    discriminator = Discriminator(alpha=args.alpha).to(device)
-    
+    global_discriminator = GlobalDiscriminator(alpha=args.alpha).to(device)
+    local_discriminator = LocalDiscriminator(alpha=args.alpha).to(device)
+
     # create dataloaders
     # mini_batch_size = model.hyperparams['batch'] // model.hyperparams['subdivisions']
     mini_batch_size = hyperparams['batch_size']
@@ -73,15 +74,21 @@ def main(args, hyperparams, run):
     
     # create optimizer
     params = [p for p in model.parameters() if p.requires_grad]
-    params_classifier = [p for p in discriminator.parameters() if p.requires_grad]
+    params_global_classifier = [p for p in global_discriminator.parameters() if p.requires_grad]
+    params_local_classifier = [p for p in local_discriminator.parameters() if p.requires_grad]
     optimizer = optim.Adam(
         params,
         lr=float(model.hyperparams['learning_rate']),
         weight_decay=float(model.hyperparams['decay'])
     )
-    optimizer_classifier = optim.Adam(
-        params_classifier,
-        lr=float(hyperparams["learning_rate_disc"]),
+    optimizer_global_classifier = optim.Adam(
+        params_global_classifier,
+        lr=float(hyperparams["learning_rate_global_disc"]),
+        weight_decay=float(hyperparams["decay_disc"])
+    )
+    optimizer_local_classifier = optim.Adam(
+        params_local_classifier,
+        lr=float(hyperparams["learning_rate_local_disc"]),
         weight_decay=float(hyperparams["decay_disc"])
     )
 
@@ -126,11 +133,13 @@ def main(args, hyperparams, run):
         
         model = train(
             model=model,
-            discriminator=discriminator,
+            global_discriminator=global_discriminator,
+            local_discriminator=local_discriminator,
             source_dataloader=source_dataloader,
             device=device,
             optimizer=optimizer,
-            optimizer_classifier=optimizer_classifier,
+            optimizer_global_classifier=optimizer_global_classifier,
+            optimizer_local_classifier=optimizer_local_classifier,
             mini_batch_size=mini_batch_size,
             target_dataloader=target_dataloader,
             validation_dataloader=validation_dataloader,
@@ -165,12 +174,14 @@ if __name__ == '__main__':
                     help="Weighting for discriminator loss, yolo weight is 1.0")
     ap.add_argument("--lambda-mmd", type=float, default=0.001,
                     help="Weighting for MMD loss, yolo weight is 1.0")
-    ap.add_argument("--lr-disc", type=float, default=0.0001,
-                    help="Learning rate for discriminator")
+    ap.add_argument("--lr-global-disc", type=float, default=0.0001,
+                    help="Learning rate for global discriminator")
+    ap.add_argument("--lr-local-disc", type=float, default=0.0001,
+                    help="Learning rate for local discriminator")
     ap.add_argument("--decay-disc", type=float, default=0.0001,
                     help="Weight decay for discriminator")
     ap.add_argument("--disc-loss-func", type=str, default="focal",
-                    help="Should be `focal` or `bce`.")
+                    help="Note: This only changes the global discriminator. Should be `focal` or `bce`.")
     ap.add_argument("-b", "--batch-size", type=int, default=2,
                     help="Number of samples per batch.")
     ap.add_argument("-t", "--train-path", required=True,
@@ -223,7 +234,8 @@ if __name__ == '__main__':
         "k": args.k,
         "img_size": 416,
         "batch_size": args.batch_size,
-        "learning_rate_disc": args.lr_disc,
+        "learning_rate_global_disc": args.lr_global_disc,
+        "learning_rate_local_disc": args.lr_local_disc,
         "limit_val_size": args.limit_val_size,
     }
 

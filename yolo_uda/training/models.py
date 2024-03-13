@@ -97,17 +97,16 @@ class _GradientReversal(torch.autograd.Function):
             "grl_backward_grad_mean": grad_output.mean().item(),
         }, commit=False)
         return -ctx.alpha * grad_output, None
-    
-class Discriminator(nn.Module):
+
+class GlobalDiscriminator(nn.Module):
     """
     A 3-layer MLP + Gradient Reversal Layer for domain classification.
     """
 
-    def __init__(self, in_size=255*13*13, h=2048, out_size=1, alpha=1.0):
+    def __init__(self, in_size=255, out_size=1, alpha=1.0):
         """
         Arguments:
             in_size: size of the input
-            h: hidden layer size
             out_size: size of the output
             alpha: grl constant
         """
@@ -116,16 +115,56 @@ class Discriminator(nn.Module):
 
         self.net = nn.Sequential(
             GradientReversal(alpha=alpha),
-            nn.Linear(in_size, h),
+            nn.Conv2d(in_channels=in_size, out_channels=512, kernel_size=3, stride=1, bias=False),
+            nn.BatchNorm2d(num_features=512),
             nn.ReLU(),
-            nn.Linear(h, h),
+            nn.Dropout(p=0.5),
+            nn.Conv2d(in_channels=512, out_channels=128, kernel_size=3, stride=1, bias=False),
+            nn.BatchNorm2d(num_features=128),
             nn.ReLU(),
-            nn.Linear(h, out_size),
+            nn.Dropout(p=0.5),
+            nn.AvgPool2d(9),
+            nn.Flatten(),
+            nn.Linear(128, out_size),
             nn.Sigmoid()
         )
 
     def forward(self, x):
-        return self.net(torch.flatten(x,1)).squeeze(-1)
+        return self.net(x).squeeze(-1)
+        # return self.net(torch.flatten(x,1)).squeeze(-1)
+
+
+class LocalDiscriminator(nn.Module):
+    """
+    A 3-layer MLP + Gradient Reversal Layer for domain classification.
+    """
+
+    def __init__(self, in_size=255, alpha=1.0):
+        """
+        Arguments:
+            in_size: size of the input
+            out_size: size of the output
+            alpha: grl constant
+        """
+
+        super().__init__()
+
+        self.net = nn.Sequential(
+            GradientReversal(alpha=alpha),
+            nn.Conv2d(in_channels=in_size, out_channels=256, kernel_size=1, stride=1, bias=False),
+            nn.BatchNorm2d(num_features=256),
+            nn.ReLU(),
+            nn.Conv2d(in_channels=256, out_channels=128, kernel_size=1, stride=1, bias=False),
+            nn.BatchNorm2d(num_features=128),
+            nn.ReLU(),
+            nn.Conv2d(in_channels=128, out_channels=1, kernel_size=1, stride=1, bias=False),
+            nn.Sigmoid()
+        )
+
+    def forward(self, x):
+        return self.net(x).squeeze(1)
+        # return self.net(torch.flatten(x,1)).squeeze(-1)
+
 
 #####################
 # YOLO architecture #
