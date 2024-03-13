@@ -101,6 +101,7 @@ def validate(
     verbose: Optional[bool] = False,
     epochs: Optional[int] = 10,
     evaluate_interval: Optional[int] = 1,
+    metrics_suffix: Optional[str] = "",
 ):
     
     print("\n---- Evaluating Model ----")
@@ -119,8 +120,8 @@ def validate(
     if metrics_output is not None:
         precision, recall, AP, f1, ap_class = metrics_output
         run.log({
-            "test_precision": precision.mean(),
-            "test_recall": recall.mean(),
-            "test_f1": f1.mean(),
-            "test_mAP": AP.mean()
+            f"test_precision_{metrics_suffix}": precision.mean(),
+            f"test_recall_{metrics_suffix}": recall.mean(),
+            f"test_f1_{metrics_suffix}": f1.mean(),
+            f"test_mAP_{metrics_suffix}": AP.mean()
         })
