@@ -101,6 +101,41 @@ class _GradientReversal(torch.autograd.Function):
         return -ctx.alpha * grad_output, None
 
 
+class GradientTracker(torch.nn.Module):
+    """
+    Tracks the gradient of the input during the forward pass.
+    """
+
+    def __init__(self):
+        """
+        Arguments:
+            weight: The gradients  will be multiplied by ```-alpha```
+                during the backward pass.
+        """
+        super().__init__()
+
+    def forward(self, x):
+        """"""
+        return _GradientTracker.apply(x)
+
+
+class _GradientTracker(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, input):
+        wandb.log({
+            "context_forward_input_mean": input.mean().item(),
+        }, commit=False)
+        return input
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        wandb.log({
+            "context_backward_grad_mean": grad_output.mean().item(),
+        }, commit=False)
+        return grad_output, None
+
+
+
 class GlobalDiscriminator(nn.Module):
     """
     A 3-layer MLP + Gradient Reversal Layer for domain classification.
@@ -283,13 +318,7 @@ class YOLOContextDownsample(nn.Module):
             nn.Conv2d(256, 256, kernel_size=1, stride=1, padding=0, bias=False),
             nn.BatchNorm2d(256),
             nn.ReLU(),
-        )
-
-        self.fused_downsample = nn.Sequential(
-            nn.Conv2d(256 + 255, 256 + 255, kernel_size=1, stride=1, padding=0, bias=False),
-            nn.BatchNorm2d(256 + 255),
-            nn.ReLU(),
-            nn.Conv2d(256 + 255, 255, kernel_size=1, stride=1, padding=0, bias=False),
+            nn.Conv2d(256, 255, kernel_size=1, stride=1, padding=0, bias=False),
             nn.BatchNorm2d(255),
             nn.ReLU()
         )
@@ -298,8 +327,8 @@ class YOLOContextDownsample(nn.Module):
         context = context.reshape(x.shape[0], -1, x.shape[2], x.shape[3])
         context = self.context_downsample(context)
 
-        out = torch.cat([x, context], 1)
-        return self.fused_downsample(out)
+        # out = torch.cat([x, context], 1)
+        return x + context #self.fused_downsample(out)
 
 
 class GRLDarknet(Darknet):
@@ -314,8 +343,8 @@ class GRLDarknet(Darknet):
 
         super(GRLDarknet, self).__init__(config_path=config_path, img_size=img_size)
 
-        if context:
-            self.context_fusion = YOLOContextDownsample()
+        self.context_fusion = YOLOContextDownsample()
+        self.gradient_tracker = GradientTracker()
 
     def forward(self, x, targets=None):
         num_samples = x.shape[0]
@@ -448,14 +477,19 @@ class GRLDarknet(Darknet):
                 global_context = global_context.unsqueeze(-1).unsqueeze(-1).expand(
                     -1, -1, local_context.shape[2], local_context.shape[3])
                 context = global_context + local_context
-
                 x = self.context_fusion(x, context)
+                x = self.gradient_tracker(x)
 
+                wandb.log({
+                    "context_mean": context.mean().item(),
+                    "post_context_mean": x.mean().item(),
+                }, commit=False)
 
         if self.training:
             return yolo_outputs
 
-    def create_modules(self, module_defs: List[dict]) -> Tuple[dict, nn.ModuleList]:
+    @staticmethod
+    def create_modules(module_defs: List[dict]) -> Tuple[dict, nn.ModuleList]:
         """
         Constructs module list of layer blocks from module configuration in module_defs
 

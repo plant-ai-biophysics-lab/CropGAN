@@ -158,6 +158,7 @@ def main(args, hyperparams, run):
             run=run,
             context=args.context_vector
         )
+        
         # save model weights
         save_name = f"ckpt_last_{datetime.today().strftime('%Y-%m-%d_%H-%M-%S')}.pth"
         save_filepath = os.path.join(save_dir, save_name)
