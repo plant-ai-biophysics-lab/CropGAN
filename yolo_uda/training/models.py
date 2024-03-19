@@ -419,6 +419,11 @@ class GRLDarknet(Darknet):
         layer_outputs, yolo_outputs = [], []
         # Use different feature map layers if yolov3 vs. yolov3-tiny
         feature_map_layers = [15, 22] if self.use_tiny else [81, 93, 105]
+        
+        # Prepare context vectors for concatenation by adding dummy spatial dimensions
+        compress_conv = nn.Conv2d(255 + 128 * 2, 255, kernel_size=1, stride=1, padding=0).to(torch.device("cuda"))
+        global_context = global_context.unsqueeze(-1).unsqueeze(-1)  # Shape: [num_samples, 128, 1, 1]
+        
         for i, (module_def, module) in enumerate(zip(self.module_defs, self.module_list)):
             if module_def["type"] in ["convolutional", "upsample", "maxpool"]:
                 x = module(x)
@@ -440,17 +445,26 @@ class GRLDarknet(Darknet):
                 else:
                     yolo_outputs.append(pred)
             layer_outputs.append(x)
+            
             if i in feature_map_layers:
-                feature_maps.append(x)
+        
+                # then, resize global_context to match x's spatial size
+                resized_global_context = F.interpolate(global_context, size=x.size()[2:], mode='nearest')
+                
+                # ensure resized_local_context matches x's dimensions
+                if local_context.size()[2:] != x.size()[2:]:
+                    resized_local_context = F.interpolate(local_context, size=x.size()[2:], mode='nearest')
+                else:
+                    resized_local_context = local_context
+                    
+                # adaptive pool the context vectors
+                resized_global_context = (resized_global_context[0::2] + resized_global_context[1::2]) / 2
+                resized_local_context = (resized_local_context[0::2] + resized_local_context[1::2]) / 2
 
-            # if this is the last feature map, concatenate with the global & local context
-            if i == feature_map_layers[-1]:
-                global_context = global_context.unsqueeze(-1).unsqueeze(-1).expand(
-                    -1, -1, local_context.shape[2], local_context.shape[3])
-                context = global_context + local_context
-
-                x = self.context_fusion(x, context)
-
+                # concatenate along the channel dimension
+                x = torch.cat((x, resized_global_context, resized_local_context), dim=1)
+                x = compress_conv(x)
+                layer_outputs[-1] = x
 
         if self.training:
             return yolo_outputs
