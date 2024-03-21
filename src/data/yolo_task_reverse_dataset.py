@@ -10,7 +10,18 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 
-
+K_CROPGAN_MAP = {
+    1:2,
+    4:5,
+    8:9,
+    12:14,
+    16:19,
+    24:30,
+    32:40,
+    40:50,
+    98:126,
+    58:73
+}
 
 def resize(image, size):
     image = F.interpolate(image.unsqueeze(0), size=size, mode="nearest").squeeze(0)
@@ -60,12 +71,18 @@ class YoloTaskReverseDataset(BaseDataset):
         BaseDataset.__init__(self, opt)
         self.dir_A = os.path.join(opt.dataroot, 'trainA')  # create a path '/path/to/data/trainA'
         self.dir_B = os.path.join(opt.dataroot, 'trainB')  # create a path '/path/to/data/trainB'
-        self.dir_labeled_A = os.path.join(opt.dataroot, 'labeledB')  # create a path '/path/to/data/labeledB'
+        self.dir_labeled_B = os.path.join(opt.dataroot, 'labeledB')  # create a path '/path/to/data/labeledB'
 
 
         self.A_paths = sorted(make_dataset(self.dir_A, opt.max_dataset_size))   # load images from '/path/to/data/trainA'
         self.B_paths = sorted(make_dataset(self.dir_B, opt.max_dataset_size))    # load images from '/path/to/data/trainB'
-        self.labeled_B_paths = sorted(make_dataset(self.dir_labeled_A, opt.max_dataset_size))    # load images from '/path/to/data/labeledB'
+        # Use both the labeled training and val images
+        if opt.reverse_task_k in K_CROPGAN_MAP:
+            k = K_CROPGAN_MAP[opt.reverse_task_k]
+        else:
+            # For Gemini if we use a different k value than in paper.
+            k = max(1,int(1.25*opt.reverse_task_k))
+        self.labeled_B_paths = sorted(make_dataset(self.dir_labeled_B, k, shuffle=True))    # load images from '/path/to/data/labeledB'
 
         self.A_size = len(self.A_paths)  # get the size of dataset A
         self.B_size = len(self.B_paths)  # get the size of dataset B
@@ -110,7 +127,7 @@ class YoloTaskReverseDataset(BaseDataset):
             self.transform_A, self.transform_B  = get_transform(self.opt, img_size=A_img.size, grayscale=(self.input_nc == 1))
             
             # Preprocess for A
-            A_label_path = A_path.replace("train", "label").replace(".png", ".txt").replace(".jpg", ".txt")
+            A_label_path = A_path.replace("train", "label").replace(".png", ".txt").replace(".jpg", ".txt").replace(".jpeg", ".txt")
             boxes = np.loadtxt(A_label_path).reshape(-1, 5)
             boxes = get_valid_box(boxes)
             boxes = torch.from_numpy(boxes)
@@ -146,7 +163,7 @@ class YoloTaskReverseDataset(BaseDataset):
 
 
             # Preprocess for labeled B
-            B_label_path = labeled_B_path.replace(".png", ".txt").replace(".jpg", ".txt")
+            B_label_path = labeled_B_path.replace(".png", ".txt").replace(".jpg", ".txt").replace(".jpeg", ".txt")
             boxes = np.loadtxt(B_label_path).reshape(-1, 5)
             boxes = get_valid_box(boxes)
             boxes = torch.from_numpy(boxes)
