@@ -16,10 +16,12 @@ from pytorchyolo.utils.utils import weights_init_normal
 import wandb
 
 import sys
+
 sys.path.append(os.path.dirname(os.path.dirname(sys.path[0])))
 from src.models.yolo_model import Darknet
 
-def load_model(model_path, weights_path=None):
+
+def load_model(model_path, weights_path=None, context=False):
     """Loads the yolo model from file.
 
     :param model_path: Path to model definition file (.cfg)
@@ -31,7 +33,7 @@ def load_model(model_path, weights_path=None):
     """
     device = torch.device("cuda" if torch.cuda.is_available()
                           else "cpu")  # Select device for inference
-    model = GRLDarknet(model_path).to(device)
+    model = GRLDarknet(model_path, context=context).to(device)
 
     model.apply(weights_init_normal)
 
@@ -46,10 +48,10 @@ def load_model(model_path, weights_path=None):
     return model
 
 
-
 #####################
 ### Discriminator ###
 #####################
+
 class GradientReversal(torch.nn.Module):
     """
     Implementation of the gradient reversal layer described in
@@ -98,12 +100,47 @@ class _GradientReversal(torch.autograd.Function):
         }, commit=False)
         return -ctx.alpha * grad_output, None
 
+
+class GradientTracker(torch.nn.Module):
+    """
+    Tracks the gradient of the input during the forward pass.
+    """
+
+    def __init__(self):
+        """
+        Arguments:
+            weight: The gradients  will be multiplied by ```-alpha```
+                during the backward pass.
+        """
+        super().__init__()
+
+    def forward(self, x):
+        """"""
+        return _GradientTracker.apply(x)
+
+
+class _GradientTracker(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, input):
+        wandb.log({
+            "context_forward_input_mean": input.mean().item(),
+        }, commit=False)
+        return input
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        wandb.log({
+            "context_backward_grad_mean": grad_output.mean().item(),
+        }, commit=False)
+        return grad_output, None
+
+
 class GlobalDiscriminator(nn.Module):
     """
     A 3-layer MLP + Gradient Reversal Layer for domain classification.
     """
 
-    def __init__(self, in_size=255, out_size=1, alpha=1.0):
+    def __init__(self, in_size=255, out_size=1, alpha=1.0, context=False):
         """
         Arguments:
             in_size: size of the input
@@ -124,14 +161,22 @@ class GlobalDiscriminator(nn.Module):
             nn.ReLU(),
             nn.Dropout(p=0.5),
             nn.AvgPool2d(9),
-            nn.Flatten(),
+            nn.Flatten()
+        )
+
+        self.out = nn.Sequential(
             nn.Linear(128, out_size),
             nn.Sigmoid()
         )
 
+        self.context = context
+
     def forward(self, x):
-        return self.net(x).squeeze(-1)
-        # return self.net(torch.flatten(x,1)).squeeze(-1)
+        x = self.net(x)
+        feat = x
+        if self.context:
+            return self.out(x).squeeze(1), feat
+        return self.out(x).squeeze(1), torch.zeros_like(feat)
 
 
 class LocalDiscriminator(nn.Module):
@@ -139,7 +184,7 @@ class LocalDiscriminator(nn.Module):
     A 3-layer MLP + Gradient Reversal Layer for domain classification.
     """
 
-    def __init__(self, in_size=255, alpha=1.0):
+    def __init__(self, in_size=255, alpha=1.0, context = False):
         """
         Arguments:
             in_size: size of the input
@@ -156,19 +201,29 @@ class LocalDiscriminator(nn.Module):
             nn.ReLU(),
             nn.Conv2d(in_channels=256, out_channels=128, kernel_size=1, stride=1, bias=False),
             nn.BatchNorm2d(num_features=128),
-            nn.ReLU(),
+            nn.ReLU()
+        )
+
+        self.out = nn.Sequential(
             nn.Conv2d(in_channels=128, out_channels=1, kernel_size=1, stride=1, bias=False),
             nn.Sigmoid()
         )
 
+        self.context = context
+
     def forward(self, x):
-        return self.net(x).squeeze(1)
+        x = self.net(x)
+        feat = x
+        if self.context:
+            return self.out(x).squeeze(1), feat
+        return self.out(x).squeeze(1), torch.zeros_like(feat)
         # return self.net(torch.flatten(x,1)).squeeze(-1)
 
 
 #####################
 # YOLO architecture #
 #####################
+
 class Upsample(nn.Module):
     """ nn.Upsample is deprecated """
 
@@ -180,7 +235,8 @@ class Upsample(nn.Module):
     def forward(self, x):
         x = F.interpolate(x, scale_factor=self.scale_factor, mode=self.mode)
         return x
-    
+
+
 class YOLOLayer(nn.Module):
     """Detection layer"""
 
@@ -220,7 +276,7 @@ class YOLOLayer(nn.Module):
         self.stride = stride
         bs, _, ny, nx = x.shape  # x(bs,255,20,20) to x(bs,3,20,20,85)
         x = x.view(bs, self.num_anchors, self.no, ny, nx).permute(0, 1, 3, 4, 2).contiguous()
-        
+
         if not self.training:  # inference
             pred = torch.clone(x)
             if self.grid.shape[2:4] != pred.shape[2:4]:
@@ -228,16 +284,16 @@ class YOLOLayer(nn.Module):
 
             if self.new_coords:
                 pred[..., 0:2] = (pred[..., 0:2] + self.grid) * stride  # xy
-                pred[..., 2:4] = pred[..., 2:4] ** 2 * (4 * self.anchor_grid) # wh
+                pred[..., 2:4] = pred[..., 2:4] ** 2 * (4 * self.anchor_grid)  # wh
             else:
                 pred[..., 0:2] = (pred[..., 0:2].sigmoid() + self.grid) * stride  # xy
-                pred[..., 2:4] = torch.exp(pred[..., 2:4]) * self.anchor_grid # wh
-                pred[..., 4:] = pred[..., 4:].sigmoid() # conf, cls
+                pred[..., 2:4] = torch.exp(pred[..., 2:4]) * self.anchor_grid  # wh
+                pred[..., 4:] = pred[..., 4:].sigmoid()  # conf, cls
             pred = pred.view(bs, -1, self.no)
         else:
             pred = None
         # We now return the original x during inference because CropGAN requires it.
-        return x, pred 
+        return x, pred
 
     @staticmethod
     def _make_grid(nx: int = 20, ny: int = 20) -> torch.Tensor:
@@ -251,16 +307,50 @@ class YOLOLayer(nn.Module):
         return torch.stack((xv, yv), 2).view((1, 1, ny, nx, 2)).float()
 
 
+class YOLOContextDownsample(nn.Module):
+    """Downsamples the context + feature map output into the regular size"""
+
+    def __init__(self, use_context = True):
+        super(YOLOContextDownsample, self).__init__()
+
+        self.context_downsample = nn.Sequential(
+            nn.Conv2d(256, 256, kernel_size=1, stride=1, padding=0, bias=False),
+            nn.BatchNorm2d(256),
+            nn.ReLU(),
+            nn.Conv2d(256, 255, kernel_size=1, stride=1, padding=0, bias=False),
+            nn.BatchNorm2d(255),
+            nn.ReLU()
+        )
+
+        self.use_context = use_context
+
+    def forward(self, x, global_context, local_context):
+        if not self.use_context:
+            return x
+
+        global_context = global_context.unsqueeze(-1).unsqueeze(-1).expand(
+            -1, -1, local_context.shape[2], local_context.shape[3])
+        context = global_context + local_context
+        context = context.reshape(x.shape[0], -1, x.shape[2], x.shape[3])
+
+        context = self.context_downsample(context)
+        return x + context
+
+
 class GRLDarknet(Darknet):
     """YOLOv3 object detection model"""
 
-    def __init__(self, config_path: str, img_size: int =416, use_tiny: bool = None):
+    def __init__(self, config_path: str, img_size: int = 416, use_tiny: bool = None, context=False):
         # Need this for extracting feature_maps in forward()
         if use_tiny is None:
-            use_tiny =  'tiny' in config_path
+            use_tiny = 'tiny' in config_path
         self.use_tiny = use_tiny
-        super(GRLDarknet, self).__init__(config_path=config_path,img_size=img_size)
+        self.context = context
 
+        super(GRLDarknet, self).__init__(config_path=config_path, img_size=img_size)
+
+        self.context_fusion = YOLOContextDownsample(use_context=context)
+        self.gradient_tracker = GradientTracker()
 
     def forward(self, x, targets = None):
         num_samples = x.shape[0]
@@ -294,7 +384,7 @@ class GRLDarknet(Darknet):
             # Training
             return [yolo_outputs, feature_maps]
         elif targets is not None:
-            # CropGAN, need to calculate the loss but not inference metrics 
+            # CropGAN, need to calculate the loss but not inference metrics
             if len(targets) < 1:
                 loss = [0,0]
             else:
@@ -306,7 +396,99 @@ class GRLDarknet(Darknet):
             # Inference
             return torch.cat(yolo_outputs, 1)
 
-    def create_modules(self,module_defs: List[dict]) -> Tuple[dict, nn.ModuleList]:
+    def forward_features(self, x, targets=None):
+        num_samples = x.shape[0]
+        feature_maps = []  # save feature maps for discriminator
+        img_size = x.size(2)
+        layer_outputs, yolo_outputs = [], []
+        # Use different feature map layers if yolov3 vs. yolov3-tiny
+        feature_map_layers = [15, 22] if self.use_tiny else [81, 93, 105]
+        for i, (module_def, module) in enumerate(zip(self.module_defs, self.module_list)):
+            if module_def["type"] in ["convolutional", "upsample", "maxpool"]:
+                x = module(x)
+            elif module_def["type"] == "route":
+                combined_outputs = torch.cat(
+                    [layer_outputs[int(layer_i)] for layer_i in module_def["layers"].split(",")], 1)
+                group_size = combined_outputs.shape[1] // int(module_def.get("groups", 1))
+                group_id = int(module_def.get("group_id", 0))
+                x = combined_outputs[:,
+                    group_size * group_id: group_size * (group_id + 1)]  # Slice groupings used by yolo v4
+            elif module_def["type"] == "shortcut":
+                layer_i = int(module_def["from"])
+                x = layer_outputs[-1] + layer_outputs[layer_i]
+            elif module_def["type"] == "yolo":
+                # x is now always the training yolo outputs, pred is the inference output
+                x, pred = module[0](x, img_size)
+            layer_outputs.append(x)
+
+            # get all of the feature maps
+            if i in feature_map_layers:
+                feature_maps.append(x)
+
+        # return just the feature maps
+        if self.training:
+            # Training
+            return feature_maps
+
+        # this probably shouldn't run, considering we're always only calling this
+        # step if we are in training mode (otherwise not doing anything).
+        elif targets is not None:
+            # CropGAN, need to calculate the loss but not inference metrics
+            if len(targets) < 1:
+                loss = [0, 0]
+            else:
+                loss, loss_components = compute_loss(yolo_outputs, targets, self)
+            # Reshape the yolo outputs, as done in CropGAN
+            yolo_outputs = torch.cat([yo.view(num_samples, -1, yo.shape[-1]) for yo in yolo_outputs], 1)
+            return loss[0], yolo_outputs
+        else:
+            # Inference
+            return torch.cat(yolo_outputs, 1)
+
+    def forward_with_context(self, x, global_context, local_context):
+        feature_maps = []
+        img_size = x.size(2)
+        layer_outputs, yolo_outputs = [], []
+        # Use different feature map layers if yolov3 vs. yolov3-tiny
+        feature_map_layers = [15, 22] if self.use_tiny else [81, 93, 105]
+        for i, (module_def, module) in enumerate(zip(self.module_defs, self.module_list)):
+            if module_def["type"] in ["convolutional", "upsample", "maxpool"]:
+                x = module(x)
+            elif module_def["type"] == "route":
+                combined_outputs = torch.cat(
+                    [layer_outputs[int(layer_i)] for layer_i in module_def["layers"].split(",")], 1)
+                group_size = combined_outputs.shape[1] // int(module_def.get("groups", 1))
+                group_id = int(module_def.get("group_id", 0))
+                x = combined_outputs[:,
+                    group_size * group_id: group_size * (group_id + 1)]
+            elif module_def["type"] == "shortcut":
+                layer_i = int(module_def["from"])
+                x = layer_outputs[-1] + layer_outputs[layer_i]
+            elif module_def["type"] == "yolo":
+                # x is now always the training yolo outputs, pred is the inference output
+                x, pred = module[0](x, img_size)
+                if self.training or targets is not None:
+                    yolo_outputs.append(x)
+                else:
+                    yolo_outputs.append(pred)
+            layer_outputs.append(x)
+            if i in feature_map_layers:
+                feature_maps.append(x)
+
+            # if this is the last feature map, concatenate with the global & local context
+            if i == feature_map_layers[-1]:
+                x = self.context_fusion(x, global_context, local_context)
+                x = self.gradient_tracker(x)
+
+                wandb.log({
+                    "post_context_mean": x.mean().item(),
+                }, commit=False)
+
+        if self.training:
+            return yolo_outputs
+
+    @staticmethod
+    def create_modules(module_defs: List[dict]) -> Tuple[dict, nn.ModuleList]:
         """
         Constructs module list of layer blocks from module configuration in module_defs
 
@@ -332,8 +514,8 @@ class GRLDarknet(Darknet):
         # manually select which steps to decay the LR at (and by what value)
         if "steps" in hyperparams and "scales" in hyperparams:
             hyperparams.update({
-                'lr_steps': list(zip(map(int,   hyperparams["steps"].split(",")),
-                                    map(float, hyperparams["scales"].split(","))))
+                'lr_steps': list(zip(map(int, hyperparams["steps"].split(",")),
+                                     map(float, hyperparams["scales"].split(","))))
             })
 
         # decay by the value `lr_gamma` every N steps or every N epochs
@@ -373,7 +555,7 @@ class GRLDarknet(Darknet):
                 )
                 if bn:
                     modules.add_module(f"batch_norm_{module_i}",
-                                    nn.BatchNorm2d(filters, momentum=0.1, eps=1e-5))
+                                       nn.BatchNorm2d(filters, momentum=0.1, eps=1e-5))
                 if module_def["activation"] == "leaky":
                     modules.add_module(f"leaky_{module_i}", nn.LeakyReLU(0.1))
                 elif module_def["activation"] == "mish":
@@ -389,7 +571,7 @@ class GRLDarknet(Darknet):
                 if kernel_size == 2 and stride == 1:
                     modules.add_module(f"_debug_padding_{module_i}", nn.ZeroPad2d((0, 1, 0, 1)))
                 maxpool = nn.MaxPool2d(kernel_size=kernel_size, stride=stride,
-                                    padding=int((kernel_size - 1) // 2))
+                                       padding=int((kernel_size - 1) // 2))
                 modules.add_module(f"maxpool_{module_i}", maxpool)
 
             elif module_def["type"] == "upsample":
