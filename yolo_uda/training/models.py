@@ -135,7 +135,6 @@ class _GradientTracker(torch.autograd.Function):
         return grad_output, None
 
 
-
 class GlobalDiscriminator(nn.Module):
     """
     A 3-layer MLP + Gradient Reversal Layer for domain classification.
@@ -173,11 +172,11 @@ class GlobalDiscriminator(nn.Module):
         self.context = context
 
     def forward(self, x):
+        x = self.net(x)
+        feat = x
         if self.context:
-            x = self.net(x)
-            feat = x
             return self.out(x).squeeze(1), feat
-        return self.net(x).squeeze(1)
+        return self.out(x).squeeze(1), torch.zeros_like(feat)
 
 
 class LocalDiscriminator(nn.Module):
@@ -213,11 +212,11 @@ class LocalDiscriminator(nn.Module):
         self.context = context
 
     def forward(self, x):
+        x = self.net(x)
+        feat = x
         if self.context:
-            x = self.net(x)
-            feat = x
             return self.out(x).squeeze(1), feat
-        return self.net(x).squeeze(1)
+        return self.out(x).squeeze(1), torch.zeros_like(feat)
         # return self.net(torch.flatten(x,1)).squeeze(-1)
 
 
@@ -311,7 +310,7 @@ class YOLOLayer(nn.Module):
 class YOLOContextDownsample(nn.Module):
     """Downsamples the context + feature map output into the regular size"""
 
-    def __init__(self):
+    def __init__(self, use_context = True):
         super(YOLOContextDownsample, self).__init__()
 
         self.context_downsample = nn.Sequential(
@@ -323,12 +322,19 @@ class YOLOContextDownsample(nn.Module):
             nn.ReLU()
         )
 
-    def forward(self, x, context):
-        context = context.reshape(x.shape[0], -1, x.shape[2], x.shape[3])
-        context = self.context_downsample(context)
+        self.use_context = use_context
 
-        # out = torch.cat([x, context], 1)
-        return x + context #self.fused_downsample(out)
+    def forward(self, x, global_context, local_context):
+        if not self.use_context:
+            return x
+
+        global_context = global_context.unsqueeze(-1).unsqueeze(-1).expand(
+            -1, -1, local_context.shape[2], local_context.shape[3])
+        context = global_context + local_context
+        context = context.reshape(x.shape[0], -1, x.shape[2], x.shape[3])
+
+        context = self.context_downsample(context)
+        return x + context
 
 
 class GRLDarknet(Darknet):
@@ -343,26 +349,24 @@ class GRLDarknet(Darknet):
 
         super(GRLDarknet, self).__init__(config_path=config_path, img_size=img_size)
 
-        self.context_fusion = YOLOContextDownsample()
+        self.context_fusion = YOLOContextDownsample(use_context=context)
         self.gradient_tracker = GradientTracker()
 
-    def forward(self, x, targets=None):
+    def forward(self, x, targets = None):
         num_samples = x.shape[0]
-        feature_maps = []  # save feature maps for discriminator
+        feature_maps = [] # save feature maps for discriminator
         img_size = x.size(2)
         layer_outputs, yolo_outputs = [], []
         # Use different feature map layers if yolov3 vs. yolov3-tiny
-        feature_map_layers = [15, 22] if self.use_tiny else [81, 93, 105]
+        feature_map_layers = [15,22] if self.use_tiny else [81,93,105]
         for i, (module_def, module) in enumerate(zip(self.module_defs, self.module_list)):
             if module_def["type"] in ["convolutional", "upsample", "maxpool"]:
                 x = module(x)
             elif module_def["type"] == "route":
-                combined_outputs = torch.cat(
-                    [layer_outputs[int(layer_i)] for layer_i in module_def["layers"].split(",")], 1)
+                combined_outputs = torch.cat([layer_outputs[int(layer_i)] for layer_i in module_def["layers"].split(",")], 1)
                 group_size = combined_outputs.shape[1] // int(module_def.get("groups", 1))
                 group_id = int(module_def.get("group_id", 0))
-                x = combined_outputs[:,
-                    group_size * group_id: group_size * (group_id + 1)]  # Slice groupings used by yolo v4
+                x = combined_outputs[:, group_size * group_id : group_size * (group_id + 1)] # Slice groupings used by yolo v4
             elif module_def["type"] == "shortcut":
                 layer_i = int(module_def["from"])
                 x = layer_outputs[-1] + layer_outputs[layer_i]
@@ -382,11 +386,11 @@ class GRLDarknet(Darknet):
         elif targets is not None:
             # CropGAN, need to calculate the loss but not inference metrics
             if len(targets) < 1:
-                loss = [0, 0]
+                loss = [0,0]
             else:
-                loss, loss_components = compute_loss(yolo_outputs, targets, self)
+                loss, loss_components = compute_loss(yolo_outputs, targets,self)
             # Reshape the yolo outputs, as done in CropGAN
-            yolo_outputs = torch.cat([yo.view(num_samples, -1, yo.shape[-1]) for yo in yolo_outputs], 1)
+            yolo_outputs = torch.cat([yo.view(num_samples,-1,yo.shape[-1]) for yo in yolo_outputs],1)
             return loss[0], yolo_outputs
         else:
             # Inference
@@ -442,7 +446,6 @@ class GRLDarknet(Darknet):
             return torch.cat(yolo_outputs, 1)
 
     def forward_with_context(self, x, global_context, local_context):
-        num_samples = x.shape[0]
         feature_maps = []
         img_size = x.size(2)
         layer_outputs, yolo_outputs = [], []
@@ -474,14 +477,10 @@ class GRLDarknet(Darknet):
 
             # if this is the last feature map, concatenate with the global & local context
             if i == feature_map_layers[-1]:
-                global_context = global_context.unsqueeze(-1).unsqueeze(-1).expand(
-                    -1, -1, local_context.shape[2], local_context.shape[3])
-                context = global_context + local_context
-                x = self.context_fusion(x, context)
+                x = self.context_fusion(x, global_context, local_context)
                 x = self.gradient_tracker(x)
 
                 wandb.log({
-                    "context_mean": context.mean().item(),
                     "post_context_mean": x.mean().item(),
                 }, commit=False)
 

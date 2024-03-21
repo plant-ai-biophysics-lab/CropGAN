@@ -131,3 +131,4 @@ dmypy.json
 # for yolo-uda branch
 yolo_uda/wandb
 yolo_uda/*.pth
+*.out

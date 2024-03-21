@@ -109,25 +109,19 @@ def discriminator_step(
     Return:
       Tensor = cross entropy loss between the prediction and the ground truth.
     """
-    if context:
-        global_outputs, global_context = global_discriminator(map_features['global_features'])
-        local_outputs, local_context = local_discriminator(map_features['local_features'])
-    else:
-        global_outputs = global_discriminator(map_features['global_features'])
-        local_outputs = local_discriminator(map_features['local_features'])
+    global_outputs, global_context = global_discriminator(map_features['global_features'])
+    local_outputs, local_context = local_discriminator(map_features['local_features'])
 
     # calculate accuracy
     global_discriminator_acc = binary_accuracy(global_outputs, labels['global_labels'])
     local_discriminator_acc = binary_accuracy(local_outputs, labels['local_labels'])
-    discriminator_acc = {"global_discriminator_acc":global_discriminator_acc, "local_discriminator_acc":local_discriminator_acc}
+    discriminator_acc = {"global_discriminator_acc": global_discriminator_acc, "local_discriminator_acc":local_discriminator_acc}
 
     # calculate loss
     global_discriminator_loss = global_discriminator_loss_function(global_outputs, labels['global_labels'].float())
     local_discriminator_loss = local_discriminator_loss_function(local_outputs, labels['local_labels'].float())
 
-    if context:
-        return global_discriminator_loss, local_discriminator_loss, discriminator_acc, global_context, local_context
-    return global_discriminator_loss, local_discriminator_loss, discriminator_acc
+    return global_discriminator_loss, local_discriminator_loss, discriminator_acc, global_context, local_context
 
 
 def compose_discriminator_batch(source_features: torch.Tensor, target_features: torch.Tensor,
@@ -218,7 +212,7 @@ def train(
         global_discriminator_acc = {"total": 0, "batch_count": 0, "batch_size": mini_batch_size*2}
         local_discriminator_acc = {"total": 0, "batch_count": 0, "batch_size": mini_batch_size*2}
 
-        ## Feature map similarity metrics
+        # Feature map similarity metrics
         # Cosine similarity metrics
         cosine_similarity_metrics_l15 = FeatureMapCosineSimilarity(layer="15")
         cosine_similarity_metrics_l22 = FeatureMapCosineSimilarity(layer="22")
@@ -232,8 +226,6 @@ def train(
 
         # tracker
         updated_lr_this_epoch = False
-
-        print(model)
 
         for batch_i, contents in enumerate(
             tqdm.tqdm(zip(source_dataloader, target_dataloader), desc=f"Training Epoch {epoch}")
@@ -260,72 +252,41 @@ def train(
             # pass them through the discriminator to get the discriminator outputs and context
             # vectors, and then pass the context vectors back into the yolo model to get the
             # final yolo output -> this requires multiple steps
-            if context:
-                # run source pass
-                source_features = model.forward_features(source_imgs)
-                # Run target pass to encode features for classifier
-                target_features = model.forward_features(target_imgs)
 
-                features, labels = compose_discriminator_batch(
-                    source_features=source_features,
-                    target_features=target_features,
-                    mini_batch_size=mini_batch_size,
-                    downsample_2=downsample_2,
-                    downsample_4=downsample_4,
-                    labels_source=labels_source,
-                    labels_target=labels_target,
-                    device=device
-                )
+            # run source pass
+            source_features = model.forward_features(source_imgs)
+            # Run target pass to encode features for classifier
+            target_features = model.forward_features(target_imgs)
 
-                # discriminator_step handles both global and local
-                (global_discriminator_loss, local_discriminator_loss, batch_discriminator_acc,
-                 global_context, local_context) = discriminator_step(
-                    global_discriminator=global_discriminator,
-                    local_discriminator=local_discriminator,
-                    map_features=features,
-                    labels=labels,
-                    mini_batch_size=2 * mini_batch_size,
-                    global_discriminator_loss_function=discriminator_loss_function,
-                    local_discriminator_loss_function=nn.MSELoss(),
-                    context=True
-                )
-                
-                # get the source outputs with the context
-                source_outputs = model.forward_with_context(source_imgs, global_context, local_context)
-                
-                # yolo loss
-                yolo_loss, loss_components = compute_loss(source_outputs, targets, model)
+            features, labels = compose_discriminator_batch(
+                source_features=source_features,
+                target_features=target_features,
+                mini_batch_size=mini_batch_size,
+                downsample_2=downsample_2,
+                downsample_4=downsample_4,
+                labels_source=labels_source,
+                labels_target=labels_target,
+                device=device
+            )
 
-            else:
-                # run source pass
-                source_outputs, source_features = model(source_imgs)
-                # Run target pass to encode features for classifier
-                target_outputs, target_features = model(target_imgs)
-                # yolo loss
-                yolo_loss, loss_components = compute_loss(source_outputs, targets, model)
+            # discriminator_step handles both global and local
+            (global_discriminator_loss, local_discriminator_loss, batch_discriminator_acc,
+             global_context, local_context) = discriminator_step(
+                global_discriminator=global_discriminator,
+                local_discriminator=local_discriminator,
+                map_features=features,
+                labels=labels,
+                mini_batch_size=2 * mini_batch_size,
+                global_discriminator_loss_function=discriminator_loss_function,
+                local_discriminator_loss_function=nn.MSELoss(),
+                context=True
+            )
 
-                features, labels = compose_discriminator_batch(
-                    source_features=source_features,
-                    target_features=target_features,
-                    mini_batch_size=mini_batch_size,
-                    downsample_2=downsample_2,
-                    downsample_4=downsample_4,
-                    labels_source=labels_source,
-                    labels_target=labels_target,
-                    device=device
-                )
+            # get the source outputs with the context
+            source_outputs = model.forward_with_context(source_imgs, global_context, local_context)
 
-                # discriminator_step handles both global and local
-                global_discriminator_loss, local_discriminator_loss, batch_discriminator_acc = discriminator_step(
-                    global_discriminator=global_discriminator,
-                    local_discriminator=local_discriminator,
-                    map_features=features,
-                    labels=labels,
-                    mini_batch_size=2*mini_batch_size,
-                    global_discriminator_loss_function=discriminator_loss_function,
-                    local_discriminator_loss_function=nn.MSELoss(),
-                    context=False
-                )
+            # yolo loss
+            yolo_loss, loss_components = compute_loss(source_outputs, targets, model)
 
             # Calculate average MMD loss per batch
             mmd_loss = mmd_metric(source_features[1], target_features[1])

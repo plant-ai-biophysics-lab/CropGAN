@@ -187,7 +187,7 @@ if __name__ == '__main__':
                     help="Weight decay for discriminator")
     ap.add_argument("--disc-loss-func", type=str, default="focal",
                     help="Note: This only changes the global discriminator. Should be `focal` or `bce`.")
-    ap.add_argument("-b", "--batch-size", type=int, default=2,
+    ap.add_argument("-b", "--batch-size", type=int, default=4,
                     help="Number of samples per batch.")
     ap.add_argument("-t", "--train-path", required=True,
                     help="Path to file containing training images")
