@@ -14,7 +14,7 @@ from torch.autograd import Variable
 from torchmetrics.classification import BinaryAccuracy
 from pytorchyolo.utils.loss import compute_loss
 from pytorchyolo.utils.utils import to_cpu, ap_per_class, get_batch_statistics, non_max_suppression, xywh2xyxy
-from models import Upsample
+from models import Upsample, FeatureFusionModule
 from metrics import FeatureMapCosineSimilarity, FeatureMapEuclideanDistance, MMDLoss, RBF
 
 
@@ -123,7 +123,7 @@ def discriminator_step(
     return global_discriminator_loss, local_discriminator_loss, discriminator_acc
 
 
-def compose_discriminator_batch(source_features: torch.Tensor, target_features: torch.Tensor,
+def compose_discriminator_batch(source_features: torch.Tensor, target_features: torch.Tensor, source_bbox_features: torch.Tensor,
                                 mini_batch_size: int, downsample_2: nn.Module, downsample_4: nn.Module,
                                 labels_source: torch.Tensor, labels_target: torch.Tensor,
                                 device: torch.device, shuffle: bool = True):
@@ -138,14 +138,14 @@ def compose_discriminator_batch(source_features: torch.Tensor, target_features: 
         target_features[2] = downsample_4(target_features[2])
     
     # Create pixel-wise labels
-    activation_dims = (source_features[1].shape[2], source_features[1].shape[3], 1)
+    activation_dims = (source_bbox_features.shape[2], source_bbox_features.shape[3], 1)
     labels_source_pixelwise = labels_source.repeat(activation_dims).permute(2,0,1)
     labels_target_pixelwise = labels_target.repeat(activation_dims).permute(2,0,1)
 
     # Combine source and target batches for discriminator
     features = {
         "global_features":torch.cat([source_features[0], target_features[0]],axis=0).to(device),
-        "local_features":torch.cat([source_features[1], target_features[1]],axis=0).to(device)
+        "local_features":torch.cat([source_bbox_features, target_features[1]],axis=0).to(device)
         }
     labels = {
         "global_labels": torch.cat([labels_source, labels_target],axis=0).to(device),
@@ -160,6 +160,49 @@ def compose_discriminator_batch(source_features: torch.Tensor, target_features: 
         return features_shuffled, labels_shuffled
     return features, labels
     
+def bbox_features(source_features, targets, device, shape):
+    
+    # scale down bboxes
+    source_shape = source_features[1].shape[2]
+    scale = shape/source_shape
+
+    # make multiple crops of the feature maps based on the yolo bboxes in targets
+    source_features_resized = []
+    
+    # sort bbox_targets by batch index
+    targets_sorted = targets[targets[:, 0].sort()[1]]
+    unique_batch_indices, counts = torch.unique(targets_sorted[:, 0], return_counts=True)
+    start_positions = torch.cat((torch.tensor([0], device=device), torch.cumsum(counts, dim=0)[:-1]))
+
+    # iterate through each batch
+    for i, batch_idx in enumerate(unique_batch_indices):
+        start_pos = start_positions[i]
+        end_pos = start_pos + counts[i]
+        batch_bboxes = targets_sorted[start_pos:end_pos]
+        
+        features = []
+        for box in batch_bboxes:
+            # rescale bboxes
+            x, y, w, h = box[2:]
+            x_min, x_max = [max(0, min(source_shape, int(((x + sign * w / 2) * shape) / scale))) for sign in (-1, 1)]
+            y_min, y_max = [max(0, min(source_shape, int(((y + sign * h / 2) * shape) / scale))) for sign in (-1, 1)]
+            
+            if x_max > x_min and y_max > y_min:
+                source_bbox = source_features[1][batch_idx.long(), :, x_min:x_max, y_min:y_max].unsqueeze(0)
+                if source_bbox.nelement() > 0: 
+                    features.append(source_bbox)
+                
+        # fuse features
+        if features:
+            features = [fm.to(device) for fm in features]
+            resized_features = [F.interpolate(fm, size=(source_shape, source_shape), mode='bilinear', align_corners=False) for fm in features]
+            concatenated_features = torch.cat(resized_features, dim=1)
+            total_input_channels = concatenated_features.size(1)
+            fusion_module = FeatureFusionModule(input_channels=total_input_channels, output_channels=255).to(device)
+            fused_feature_map = fusion_module(concatenated_features)
+            source_features_resized.append(fused_feature_map)
+
+    return torch.cat(source_features_resized, dim=0)
 
 def train(
     model: nn.Module,
@@ -253,9 +296,18 @@ def train(
             # yolo loss
             yolo_loss, loss_components = compute_loss(source_outputs, targets, model)
             
+            # reassemble features for local discriminator
+            source_bbox_features = bbox_features(
+                source_features, 
+                targets, 
+                device,
+                shape=imgs_s.shape[2]
+                )
+            
             features, labels = compose_discriminator_batch(
                 source_features=source_features, 
-                target_features=target_features, 
+                target_features=target_features,
+                source_bbox_features=source_bbox_features,
                 mini_batch_size=mini_batch_size, 
                 downsample_2=downsample_2, 
                 downsample_4=downsample_4,

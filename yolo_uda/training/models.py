@@ -421,3 +421,14 @@ class GRLDarknet(Darknet):
             output_filters.append(filters)
 
         return hyperparams, module_list
+
+class FeatureFusionModule(nn.Module):
+    def __init__(self, input_channels, output_channels, kernel_size=1, stride=1, padding=0):
+        super(FeatureFusionModule, self).__init__()
+
+        self.conv = nn.Conv2d(input_channels, output_channels, kernel_size=kernel_size, stride=stride, padding=padding)
+
+    def forward(self, concatenated):
+        
+        fused_feature_map = self.conv(concatenated)
+        return fused_feature_map
