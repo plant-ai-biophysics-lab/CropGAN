@@ -92,6 +92,7 @@ def validate(
     nms_thresh: float = 0.5,
     metrics_suffix: Optional[str] = "",
     # The rest are here so that the train() and validate() interfaces are the same
+    save_dir: str = "",
     discriminator: Optional[nn.Module] = None,
     source_dataloader: Optional[DataLoader] = None,
     optimizer: Optional[torch.optim.Optimizer] = None,
@@ -99,13 +100,12 @@ def validate(
     mini_batch_size: Optional[int] = 1,
     target_dataloader: Optional[DataLoader] = None,    
     lambda_discriminator: Optional[float] = 0.5,
+    lambda_mmd: float = 0.001,
     verbose: Optional[bool] = False,
     epochs: Optional[int] = 10,
-    evaluate_interval: Optional[int] = 1,
     discriminator_loss_function: Union[Callable, nn.Module] = None,
     log_img_every_n_epochs: int = 1,
-    log_img_count: int = 10,
-    
+    log_img_count: int = 10,  
 ):
     
     print("\n---- Evaluating Model ----")

@@ -212,9 +212,9 @@ def train(
     iou_thresh: float = 0.5,
     conf_thresh: float = 0.5,
     nms_thresh: float = 0.5,
-    log_img_every_n_epochs: int = 10,
+    log_img_every_n_epochs: int = 50,
     log_img_count: int = 10,
-    metric_suffix: str = "", # Not used, just mirrors validate interface
+    metrics_suffix: str = "", # Not used, just mirrors validate interface
 ):
     # upsample_4 = Upsample(scale_factor=4, mode="nearest")
     # upsample_2 = Upsample(scale_factor=2, mode="nearest")
