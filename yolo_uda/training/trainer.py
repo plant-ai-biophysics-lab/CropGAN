@@ -33,7 +33,7 @@ def print_eval_stats(metrics_output, class_names, verbose):
     else:
         print("---- mAP not measured (no detections found by model) ----")
         
-def _evaluate(model, dataloader, class_names, img_size, iou_thres, conf_thres, nms_thres, verbose):
+def _evaluate(model, dataloader, class_names, img_size, iou_thres, conf_thres, nms_thres, step, verbose, num_imgs_to_log=0):
     """Evaluate model on validation dataset.
 
     :param model: Model to evaluate
@@ -50,6 +50,10 @@ def _evaluate(model, dataloader, class_names, img_size, iou_thres, conf_thres, n
     :type conf_thres: float
     :param nms_thres: IOU threshold for non-maximum suppression
     :type nms_thres: float
+    :param step: Training step, for logging bboxes
+    :type step: int
+    :param num_imgs_to_log: Number of images to log with predictions, if any. 
+    :type num_imgs_to_log: int
     :param verbose: If True, prints stats of model
     :type verbose: bool
     :return: Returns precision, recall, AP, f1, ap_class
@@ -61,6 +65,10 @@ def _evaluate(model, dataloader, class_names, img_size, iou_thres, conf_thres, n
 
     labels = []
     sample_metrics = []  # List of tuples (TP, confs, pred)
+    
+    # Log bboxes to W&B
+    imgs_to_log = []
+    
     for _, imgs, targets, _ in tqdm.tqdm(dataloader, desc="Validating"):
         # Extract labels
         labels += targets[:, 1].tolist()
@@ -75,6 +83,28 @@ def _evaluate(model, dataloader, class_names, img_size, iou_thres, conf_thres, n
             outputs = non_max_suppression(outputs, conf_thres=conf_thres, iou_thres=nms_thres)
 
         sample_metrics += get_batch_statistics(outputs, targets, iou_threshold=iou_thres)
+        if num_imgs_to_log > 0 and len(imgs_to_log) < num_imgs_to_log:
+            for img, output in zip(imgs,outputs):
+                all_boxes = []
+                for box_ix in range(output.shape[0]):
+                    box = output[box_ix]
+                    box_data = {"position" : {
+                        "minX" : box[0].item(),
+                        "maxX" : box[2].item(),
+                        "minY" : box[1].item(),
+                        "maxY" : box[3].item()},
+                        "class_id" : 0,
+                        "box_caption" : "Conf: (%.3f)" % (box[4].item()),
+                        "domain" : "pixel",
+                        "scores" : { "confidence" : box[4].item() }
+                        }
+                    all_boxes.append(box_data)
+                box_image = wandb.Image(img, boxes={"predictions": {"box_data": all_boxes, "class_labels": {0: "grapes"}}})
+                if len(imgs_to_log) < num_imgs_to_log:
+                    imgs_to_log.append(box_image)
+    if num_imgs_to_log > 0:
+        wandb.log({"Predictions": imgs_to_log},step=step)
+
 
     if len(sample_metrics) == 0:  # No detections over whole validation set.
         print("---- No detections over whole validation set ----")
@@ -182,6 +212,8 @@ def train(
     iou_thresh: float = 0.5,
     conf_thresh: float = 0.5,
     nms_thresh: float = 0.5,
+    log_img_every_n_epochs: int = 10,
+    log_img_count: int = 10,
     metric_suffix: str = "", # Not used, just mirrors validate interface
 ):
     # upsample_4 = Upsample(scale_factor=4, mode="nearest")
@@ -359,6 +391,13 @@ def train(
         # evaluate
         print("\n---- Evaluating Model ----")
         # Evaluate the model on the validation set
+        
+        # Every 10th epoch, log 10 images
+        log_img_every_n_epochs = 10
+        num_imgs_to_log = 0
+        if epoch % log_img_every_n_epochs == 0:
+            num_imgs_to_log = log_img_count
+
         metrics_output = _evaluate(
             model,
             validation_dataloader,
@@ -367,7 +406,9 @@ def train(
             iou_thres=iou_thresh,
             conf_thres=conf_thresh,
             nms_thres=nms_thresh,
-            verbose=verbose
+            verbose=verbose,
+            step=batches_done,
+            num_imgs_to_log=num_imgs_to_log
         )
 
         if metrics_output is not None:
