@@ -83,7 +83,7 @@ if __name__ == '__main__':
     # dual step cycle gan related variables
     # util_yolo.evaluate_yolo_net(model.netYoloB, opt.yolo_valid_path, iou_thres, conf_thres, nms_thres, img_size, class_names)
 
-    for epoch in range(opt.epoch_count, opt.n_epochs + opt.n_epochs_decay + 1):    # outer loop for different epochs; we save the model by <epoch_count>, <epoch_count>+<save_latest_freq>
+    for epoch in range(opt.epoch_start_idx, opt.n_epochs + opt.n_epochs_decay + 1):    # outer loop for different epochs; we save the model by <epoch_start_idx>, <epoch_start_idx>+<save_latest_freq>
         epoch_start_time = time.time()  # timer for entire epoch
         iter_data_time = time.time()    # timer for data loading per iteration
         epoch_iter = 0                  # the number of training iterations in current epoch, reset to 0 every epoch

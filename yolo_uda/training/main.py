@@ -155,6 +155,8 @@ def main(args, hyperparams, run):
             iou_thresh=hyperparams["iou_thresh"],
             conf_thresh=hyperparams["conf_thresh"],
             nms_thresh=hyperparams["nms_thresh"],
+            log_img_every_n_epochs = args.log_img_every_n_epochs,
+            log_img_count = args.log_img_count,
             run=run,
             context=args.context_vector
         )
@@ -225,6 +227,10 @@ if __name__ == '__main__':
                     help="If flag is passed, val set will be ~k/4, per CropGAN methodology.")
     ap.add_argument("--context-vector", action="store_true", default=False,
                     help="If flag is passed, context vector will be used in discriminator.")
+    ap.add_argument("--log-img-every-n-epochs", type=int, default=50,
+                    help="How frequently to log validation images")
+    ap.add_argument("--log-img-count", type=int, default=10,
+                    help="Number of images to log during validation each log_img_every_n_epochs")
     args = ap.parse_args()
 
     # hyperparams
