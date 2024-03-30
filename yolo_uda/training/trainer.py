@@ -129,7 +129,6 @@ def discriminator_step(
         mini_batch_size,
         global_discriminator_loss_function,
         local_discriminator_loss_function,
-        context = False
     ):
 
     """

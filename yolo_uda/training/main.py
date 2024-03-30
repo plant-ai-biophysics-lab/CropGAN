@@ -158,7 +158,6 @@ def main(args, hyperparams, run):
             log_img_every_n_epochs = args.log_img_every_n_epochs,
             log_img_count = args.log_img_count,
             run=run,
-            context=args.context_vector
         )
         
         # save model weights
