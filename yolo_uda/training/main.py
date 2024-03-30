@@ -94,13 +94,13 @@ def main(args, hyperparams, run):
 
     if args.eval_only:
         # Pull out metrics suffix
+        metrics_suffix = ""
         if args.pretrained_weights is not None:
             if args.pretrained_weights.endswith("ckpt_best_map.pth"):
                 metrics_suffix = "ckpt_best_map"
             elif "ckpt_last" in args.pretrained_weights:
                 metrics_suffix = "ckpt_last"
-            else:
-                metrics_suffix = ""
+            
 
         # validate
         model = validate(
