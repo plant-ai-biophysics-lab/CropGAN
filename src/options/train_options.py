@@ -23,7 +23,7 @@ class TrainOptions(BaseOptions):
         parser.add_argument('--save_epoch_freq', type=int, default=5, help='frequency of saving checkpoints at the end of epochs')
         parser.add_argument('--save_by_iter', action='store_true', help='whether saves model by iteration')
         parser.add_argument('--continue_train', action='store_true', help='continue training: load the latest model')
-        parser.add_argument('--epoch_count', type=int, default=1, help='the starting epoch count, we save the model by <epoch_count>, <epoch_count>+<save_latest_freq>, ...')
+        parser.add_argument('--epoch_start_idx', type=int, default=1, help='the starting epoch count, we save the model by <epoch_count>, <epoch_count>+<save_latest_freq>, ...')
         parser.add_argument('--phase', type=str, default='train', help='train, val, test, etc')
         # training parameters
         parser.add_argument('--n_epochs', type=int, default=100, help='number of epochs with the initial learning rate')
@@ -35,8 +35,6 @@ class TrainOptions(BaseOptions):
         parser.add_argument('--lr_policy', type=str, default='linear', help='learning rate policy. [linear | step | plateau | cosine]')
         parser.add_argument('--lr_decay_iters', type=int, default=50, help='multiply by a gamma every lr_decay_iters iterations')
         # dual step parameters
-        parser.add_argument('--cycle_gan_epoch', type=int, default=10, help='number of epochs train cycle gan before train yolo')
-        parser.add_argument('--yolo_epochs', type=int, default=1, help='number yolo epochs')
         parser.add_argument('--yolo_eval_on_real_period', type=int, default=500, help='eval yolo every n epochs')
         parser.add_argument('--yolo_one_shot_file', type=str, default='None', help='the path to a single shot train file (label is the same pattern name) ')
         # # Sem cycle GAN added
