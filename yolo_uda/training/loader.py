@@ -1,20 +1,33 @@
 import random
 import os
 
+import imgaug.augmenters as iaa
 from torch.utils.data import DataLoader
 from pytorchyolo.utils.augmentations import AUGMENTATION_TRANSFORMS
 from pytorchyolo.utils.transforms import DEFAULT_TRANSFORMS
 from pytorchyolo.utils.utils import worker_seed_set
 from torchvision import transforms
 from pytorchyolo.utils.transforms import ToTensor, PadSquare, RelativeLabels, AbsoluteLabels, ImgAug
-from pytorchyolo.utils.augmentations import DefaultAug, StrongAug
+from pytorchyolo.utils.augmentations import DefaultAug
 from datasets import UDAListDataset
+
+class StrongAug(ImgAug):
+    def __init__(self, ):
+        self.augmentations = iaa.Sequential([
+            iaa.Dropout([0.0, 0.01]),
+            iaa.Sharpen((0.0, 0.1)),
+            iaa.Affine(rotate=(-10, 10), translate_percent=(-0.1, 0.1), scale=(0.8, 1.5)),
+            iaa.AddToBrightness((-60, 40)),
+            iaa.GaussianBlur(sigma=(0.0, 3.0)),
+            iaa.AddToHue((-20, 20)),
+            iaa.Fliplr(0.5),
+        ])
 
 STRONG_TRANSFORMS = transforms.Compose([
     AbsoluteLabels(),
     # DefaultAug(),
     StrongAug(),
-    transforms.GaussianBlur(kernel_size=5),
+    # transforms.GaussianBlur(kernel_size=5),
     PadSquare(),
     RelativeLabels(),
     ToTensor(),
