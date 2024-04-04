@@ -52,7 +52,8 @@ def main(args, hyperparams, run):
         batch_size=hyperparams['batch_size'],
         img_size=hyperparams['img_size'],
         n_cpu=args.n_cpu,
-        multiscale_training=False
+        multiscale_training=False,
+        strong_aug=args.strong_aug
     )
     target_dataloader = _create_data_loader(
         os.path.dirname(args.target_train_path) + "/target_train.txt",
@@ -230,6 +231,9 @@ if __name__ == '__main__':
                     help="How frequently to log validation images")
     ap.add_argument("--log-img-count", type=int, default=10,
                     help="Number of images to log during validation each log_img_every_n_epochs")
+    ap.add_argument("--strong-aug", action="store_true", default=False,
+                    help="If True, use stronger augmentation during training.")
+    
     args = ap.parse_args()
 
     # hyperparams

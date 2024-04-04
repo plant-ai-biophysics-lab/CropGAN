@@ -45,7 +45,10 @@ class DoubleTaskCycleGanModel(BaseModel):
         if is_train:
             parser.add_argument('--lambda_A', type=float, default=10.0, help='weight for cycle loss (A -> B -> A)')
             parser.add_argument('--lambda_B', type=float, default=10.0, help='weight for cycle loss (B -> A -> B)')
-            parser.add_argument('--lambda_identity', type=float, default=0.5, help='use identity mapping. Setting lambda_identity other than 0 has an effect of scaling the weight of the identity mapping loss. For example, if the weight of the identity loss should be 10 times smaller than the weight of the reconstruction loss, please set lambda_identity = 0.1')
+            parser.add_argument('--lambda_identity', type=float, default=0.5, help="""use identity mapping. Setting lambda_identity 
+                                other than 0 has an effect of scaling the weight of the identity mapping loss. For example, if the 
+                                weight of the identity loss should be 10 times smaller than the weight of the reconstruction loss, 
+                                please set lambda_identity = 0.1""")
             parser.add_argument('--lambda_yolo_b', type=float, default=0.0, help='weight for yolo loss on fake B (G_B(A))')
             parser.add_argument('--lambda_yolo_a', type=float, default=0.0, help='weight for yolo loss on fake A (G_A(B))')
             parser.add_argument('--refine_yolo_b_step', type=int, default=0, help='number of step refine yolo b on one shot image')
@@ -145,8 +148,8 @@ class DoubleTaskCycleGanModel(BaseModel):
             self.criterionCycle = torch.nn.L1Loss()
             self.criterionIdt = torch.nn.L1Loss()
             # initialize optimizers; schedulers will be automatically created by function <BaseModel.setup>.
-            self.optimizer_G = torch.optim.Adam(itertools.chain(self.netG_A.parameters(), self.netG_B.parameters()), lr=opt.lr, betas=(opt.beta1, 0.999))
-            self.optimizer_D = torch.optim.Adam(itertools.chain(self.netD_A.parameters(), self.netD_B.parameters()), lr=opt.lr, betas=(opt.beta1, 0.999))
+            self.optimizer_G = torch.optim.Adam(itertools.chain(self.netG_A.parameters(), self.netG_B.parameters()), lr=opt.g_lr, betas=(opt.beta1, 0.999))
+            self.optimizer_D = torch.optim.Adam(itertools.chain(self.netD_A.parameters(), self.netD_B.parameters()), lr=opt.d_lr, betas=(opt.beta1, 0.999))
             self.optimizer_yolo_a = torch.optim.Adam(self.netYoloA.parameters(), lr=opt.lr)
             self.optimizer_yolo_b = torch.optim.Adam(self.netYoloB.parameters(), lr=opt.lr)
 
