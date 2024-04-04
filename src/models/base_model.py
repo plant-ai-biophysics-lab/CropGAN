@@ -115,15 +115,15 @@ class BaseModel(ABC):
 
     def update_learning_rate(self):
         """Update learning rates for all the networks; called at the end of every epoch"""
-        old_lr = self.optimizers[0].param_groups[0]['lr']
-        for scheduler in self.schedulers:
+        for i, (optimizer, scheduler) in enumerate(zip(self.optimizers, self.schedulers)):
+            old_lr = optimizer.param_groups[0]['lr']
             if self.opt.lr_policy == 'plateau':
                 scheduler.step(self.metric)
             else:
                 scheduler.step()
+            lr = optimizer.param_groups[0]['lr']
+            print(f'Optimizer {i} learning rate {old_lr:.7f} -> {lr:.7f}')
 
-        lr = self.optimizers[0].param_groups[0]['lr']
-        print('learning rate %.7f -> %.7f' % (old_lr, lr))
 
     def get_current_visuals(self):
         """Return visualization images. train.py will display these images with visdom, and save the images to a HTML"""
