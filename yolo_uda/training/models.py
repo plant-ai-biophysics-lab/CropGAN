@@ -396,7 +396,7 @@ class GRLDarknet(Darknet):
             # Inference
             return torch.cat(yolo_outputs, 1)
 
-    def forward_features(self, x, targets=None):
+    def forward_features(self, x, targets=None, return_feature_maps=False):
         num_samples = x.shape[0]
         feature_maps = []  # save feature maps for discriminator
         img_size = x.size(2)
@@ -426,12 +426,11 @@ class GRLDarknet(Darknet):
                 feature_maps.append(x)
 
         # return just the feature maps
-        if self.training:
+        if self.training or return_feature_maps:
             # Training
             return feature_maps
 
-        # this probably shouldn't run, considering we're always only calling this
-        # step if we are in training mode (otherwise not doing anything).
+        # specifically for inference mode
         elif targets is not None:
             # CropGAN, need to calculate the loss but not inference metrics
             if len(targets) < 1:
@@ -445,7 +444,7 @@ class GRLDarknet(Darknet):
             # Inference
             return torch.cat(yolo_outputs, 1)
 
-    def forward_with_context(self, x, global_context, local_context):
+    def forward_with_context(self, x, global_context, local_context, targets=None):
         feature_maps = []
         img_size = x.size(2)
         layer_outputs, yolo_outputs = [], []
@@ -486,6 +485,20 @@ class GRLDarknet(Darknet):
 
         if self.training:
             return yolo_outputs
+
+        # specifically for inference mode
+        elif targets is not None:
+            # CropGAN, need to calculate the loss but not inference metrics
+            if len(targets) < 1:
+                loss = [0, 0]
+            else:
+                loss, loss_components = compute_loss(yolo_outputs, targets, self)
+            # Reshape the yolo outputs, as done in CropGAN
+            yolo_outputs = torch.cat([yo.view(num_samples, -1, yo.shape[-1]) for yo in yolo_outputs], 1)
+            return loss[0], yolo_outputs
+        else:
+            # Inference
+            return torch.cat(yolo_outputs, 1)
 
     @staticmethod
     def create_modules(module_defs: List[dict]) -> Tuple[dict, nn.ModuleList]:

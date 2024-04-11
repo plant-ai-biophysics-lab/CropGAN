@@ -17,6 +17,7 @@ from evaluate import _evaluate
 
 binary_accuracy = BinaryAccuracy(threshold=0.5).to('cuda')
 
+
 def discriminator_step(
         global_discriminator,
         local_discriminator,
@@ -111,14 +112,9 @@ def train(
     iou_thresh: float = 0.5,
     conf_thresh: float = 0.5,
     nms_thresh: float = 0.5,
-<<<<<<< HEAD
-    context = False,
-    metric_suffix: str = "", # Not used, just mirrors validate interface
-=======
     log_img_every_n_epochs: int = 50,
     log_img_count: int = 10,
     metrics_suffix: str = "", # Not used, just mirrors validate interface
->>>>>>> michael/convolutional-disc
 ):
     # upsample_4 = Upsample(scale_factor=4, mode="nearest")
     # upsample_2 = Upsample(scale_factor=2, mode="nearest")
@@ -211,7 +207,6 @@ def train(
                 mini_batch_size=2 * mini_batch_size,
                 global_discriminator_loss_function=discriminator_loss_function,
                 local_discriminator_loss_function=nn.MSELoss(),
-                context=True
             )
 
             # get the source outputs with the context
@@ -332,6 +327,9 @@ def train(
 
         metrics_output = _evaluate(
             model,
+            global_discriminator,
+            local_discriminator,
+            discriminator_loss_function,
             validation_dataloader,
             class_names,
             img_size=model.hyperparams['height'],
@@ -340,7 +338,9 @@ def train(
             nms_thres=nms_thresh,
             verbose=verbose,
             step=batches_done,
-            num_imgs_to_log=num_imgs_to_log
+            num_imgs_to_log=num_imgs_to_log,
+            device=device,
+            mini_batch_size=mini_batch_size
         )
 
         if metrics_output is not None:

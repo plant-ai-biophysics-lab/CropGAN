@@ -25,7 +25,7 @@ def create_save_dir(args):
     return save_dir
 
 
-def main(args, hyperparams, run):
+def main(args, hyperparams, run, **kwargs):
     # initialize class names
     class_names = [str(i) for i in range(args.num_classes)]
 
@@ -37,10 +37,25 @@ def main(args, hyperparams, run):
                  args.limit_val_size)
 
     # load models
-    model = load_model(args.config, args.pretrained_weights, context=args.context_vector).to(device)
-    wandb.config.update(model.hyperparams)
-    global_discriminator = GlobalDiscriminator(alpha=args.alpha, context=args.context_vector).to(device)
-    local_discriminator = LocalDiscriminator(alpha=args.alpha, context=args.context_vector).to(device)
+    if args.context_vector:
+        if 'pretrained_weights' in kwargs:
+            pretrained_weights = kwargs['pretrained_weights']
+            model = load_model(args.config, pretrained_weights[0], context=args.context_vector).to(device)
+            wandb.config.update(model.hyperparams)
+            global_discriminator = GlobalDiscriminator(alpha=args.alpha, context=args.context_vector).to(device)
+            global_discriminator.load_state_dict(torch.load(pretrained_weights[1]))
+            local_discriminator = LocalDiscriminator(alpha=args.alpha, context=args.context_vector).to(device)
+            local_discriminator.load_state_dict(torch.load(pretrained_weights[2]))
+        else:
+            model = load_model(args.config, args.pretrained_weights, context=args.context_vector).to(device)
+            wandb.config.update(model.hyperparams)
+            global_discriminator = GlobalDiscriminator(alpha=args.alpha, context=args.context_vector).to(device)
+            local_discriminator = LocalDiscriminator(alpha=args.alpha, context=args.context_vector).to(device)
+    else:
+        model = load_model(args.config, args.pretrained_weights, context=args.context_vector).to(device)
+        wandb.config.update(model.hyperparams)
+        global_discriminator = GlobalDiscriminator(alpha=args.alpha, context=args.context_vector).to(device)
+        local_discriminator = LocalDiscriminator(alpha=args.alpha, context=args.context_vector).to(device)
 
     # create dataloaders
     # mini_batch_size = model.hyperparams['batch'] // model.hyperparams['subdivisions']
@@ -95,6 +110,16 @@ def main(args, hyperparams, run):
         weight_decay=float(hyperparams["decay_disc"])
     )
 
+    # Loss functions
+    # for loss calculations
+    # cross_entropy = nn.CrossEntropyLoss()
+    if args.disc_loss_func == "focal":
+        disc_loss_func = partial(sigmoid_focal_loss, alpha=-1, gamma=3, reduction='mean')
+    elif args.disc_loss_func == "bce":
+        disc_loss_func = torch.nn.BCELoss()
+    else:
+        raise ValueError(f"disc loss func can only be bce or focal, received {args.disc_loss_func}.")
+
     if args.eval_only:
         # Pull out metrics suffix
         metrics_suffix = ""
@@ -103,12 +128,15 @@ def main(args, hyperparams, run):
                 metrics_suffix = "ckpt_best_map"
             elif "ckpt_last" in args.pretrained_weights:
                 metrics_suffix = "ckpt_last"
-            
 
         # validate
         model = validate(
             model=model,
+            global_discriminator=global_discriminator,
+            local_discriminator=local_discriminator,
+            discriminator_loss_function=disc_loss_func,
             device=device,
+            mini_batch_size=mini_batch_size,
             validation_dataloader=validation_dataloader,
             class_names=class_names,
             iou_thresh=hyperparams["iou_thresh"],
@@ -123,16 +151,6 @@ def main(args, hyperparams, run):
         save_dir = create_save_dir(args)
 
         pathlib.Path(save_dir).mkdir(parents=True, exist_ok=True)
-
-        # Loss functions
-        # for loss calculations
-        # cross_entropy = nn.CrossEntropyLoss()
-        if args.disc_loss_func == "focal":
-            disc_loss_func = partial(sigmoid_focal_loss, alpha=-1, gamma=3, reduction='mean')
-        elif args.disc_loss_func == "bce":
-            disc_loss_func = torch.nn.BCELoss()
-        else:
-            raise ValueError(f"disc loss func can only be bce or focal, received {args.disc_loss_func}.")
 
         model = train(
             model=model,
@@ -169,6 +187,20 @@ def main(args, hyperparams, run):
         best_model.add_file(save_filepath)
         # run.log_artifact(best_model)
         # run.link_artifact(best_model, "model-registry/yolo-uda")
+
+        # log the discriminator weights
+        save_name = f"global_discriminator_last_{datetime.today().strftime('%Y-%m-%d_%H-%M-%S')}.pth"
+        save_filepath = os.path.join(save_dir, save_name)
+        torch.save(global_discriminator.state_dict(), save_filepath)
+        global_discriminator = wandb.Artifact(args.name, type="global_discriminator")
+        global_discriminator.add_file(save_filepath)
+        save_name = f"local_discriminator_last_{datetime.today().strftime('%Y-%m-%d_%H-%M-%S')}.pth"
+        save_filepath = os.path.join(save_dir, save_name)
+        torch.save(local_discriminator.state_dict(), save_filepath)
+        local_discriminator = wandb.Artifact(args.name, type="local_discriminator")
+        local_discriminator.add_file(save_filepath)
+        # run.log_artifact(best_discriminator)
+        # run.link_artifact(best_discriminator, "model-registry/yolo-uda")
 
 
 if __name__ == '__main__':
@@ -299,4 +331,13 @@ if __name__ == '__main__':
             raise FileNotFoundError(f"No weights found at {save_dir}")
 
         args.pretrained_weights = latest_weight
-        main(args, hyperparams, run)
+
+        # add the discriminator weights if context vector is used
+        if args.context_vector:
+            global_discriminator = os.path.join(save_dir, latest_weight.replace("ckpt_last", "global_discriminator_last"))
+            local_discriminator = os.path.join(save_dir, latest_weight.replace("ckpt_last", "local_discriminator_last"))
+            pretrained_weights = [args.pretrained_weights, global_discriminator, local_discriminator]
+
+            main(args, hyperparams, run, pretrained_weights=pretrained_weights)
+        else:
+            main(args, hyperparams, run)
