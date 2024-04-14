@@ -13,42 +13,9 @@ from pytorchyolo.utils.loss import compute_loss
 from pytorchyolo.utils.utils import to_cpu
 from models import Upsample
 from metrics import FeatureMapCosineSimilarity, FeatureMapEuclideanDistance, MMDLoss
-from evaluate import _evaluate
+from evaluate import discriminator_step, _evaluate
 
 binary_accuracy = BinaryAccuracy(threshold=0.5).to('cuda')
-
-
-def discriminator_step(
-        global_discriminator,
-        local_discriminator,
-        map_features,
-        labels,
-        mini_batch_size,
-        global_discriminator_loss_function,
-        local_discriminator_loss_function,
-    ):
-
-    """
-    Discriminator step performed between the source and targer domain.
-    Input arguments:
-      map_features: Tensor = feature map obtained from the feature extractor
-      labels: Tensor = ground truth
-    Return:
-      Tensor = cross entropy loss between the prediction and the ground truth.
-    """
-    global_outputs, global_context = global_discriminator(map_features['global_features'])
-    local_outputs, local_context = local_discriminator(map_features['local_features'])
-
-    # calculate accuracy
-    global_discriminator_acc = binary_accuracy(global_outputs, labels['global_labels'])
-    local_discriminator_acc = binary_accuracy(local_outputs, labels['local_labels'])
-    discriminator_acc = {"global_discriminator_acc": global_discriminator_acc, "local_discriminator_acc":local_discriminator_acc}
-
-    # calculate loss
-    global_discriminator_loss = global_discriminator_loss_function(global_outputs, labels['global_labels'].float())
-    local_discriminator_loss = local_discriminator_loss_function(local_outputs, labels['local_labels'].float())
-
-    return global_discriminator_loss, local_discriminator_loss, discriminator_acc, global_context, local_context
 
 
 def compose_discriminator_batch(source_features: torch.Tensor, target_features: torch.Tensor,
@@ -72,17 +39,17 @@ def compose_discriminator_batch(source_features: torch.Tensor, target_features: 
 
     # Combine source and target batches for discriminator
     features = {
-        "global_features":torch.cat([source_features[0], target_features[0]],axis=0).to(device),
-        "local_features":torch.cat([source_features[1], target_features[1]],axis=0).to(device)
+        "local_features":torch.cat([source_features[0], target_features[0]],axis=0).to(device),
+        "global_features":torch.cat([source_features[1], target_features[1]],axis=0).to(device)
         }
     labels = {
-        "global_labels": torch.cat([labels_source, labels_target],axis=0).to(device),
-        "local_labels": torch.cat([labels_source_pixelwise, labels_target_pixelwise],axis=0).to(device)
+        "local_labels": torch.cat([labels_source, labels_target],axis=0).to(device),
+        "global_labels": torch.cat([labels_source_pixelwise, labels_target_pixelwise],axis=0).to(device)
         }
 
     if shuffle:
         # Shuffle batch
-        idx = torch.randperm(features['global_features'].shape[0])
+        idx = torch.randperm(features['local_features'].shape[0])
         features_shuffled = {key:value[idx] for key,value in features.items()}
         labels_shuffled = {key:value[idx] for key,value in labels.items()}
         return features_shuffled, labels_shuffled
