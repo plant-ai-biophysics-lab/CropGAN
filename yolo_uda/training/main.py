@@ -18,34 +18,51 @@ from trainer import train
 from validate import validate
 from datetime import datetime
 
+
 def create_save_dir(args):
     save_folder = f"k-{args.k}_alpha-{args.alpha}_lambda-{args.lambda_disc}_lmmd-{args.lambda_mmd}"
     save_dir = os.path.join(args.save, save_folder)
     return save_dir
 
-def main(args, hyperparams, run):
-    
+
+def main(args, hyperparams, run, **kwargs):
     # initialize class names
     class_names = [str(i) for i in range(args.num_classes)]
 
     # select device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    
+
     # prepare data
-    prepare_data(args.train_path, args.target_train_path, args.target_val_path, args.k, args.skip_preparation, args.limit_val_size)
-    
+    prepare_data(args.train_path, args.target_train_path, args.target_val_path, args.k, args.skip_preparation,
+                 args.limit_val_size)
+
     # load models
-    model = load_model(args.config, args.pretrained_weights).to(device)
-    wandb.config.update(model.hyperparams)
-    global_discriminator = GlobalDiscriminator(alpha=args.alpha).to(device)
-    local_discriminator = LocalDiscriminator(alpha=args.alpha).to(device)
+    if args.context_vector:
+        if 'pretrained_weights' in kwargs:
+            pretrained_weights = kwargs['pretrained_weights']
+            model = load_model(args.config, pretrained_weights[0], context=args.context_vector).to(device)
+            wandb.config.update(model.hyperparams)
+            global_discriminator = GlobalDiscriminator(alpha=args.alpha, context=args.context_vector).to(device)
+            global_discriminator.load_state_dict(torch.load(pretrained_weights[1]))
+            local_discriminator = LocalDiscriminator(alpha=args.alpha, context=args.context_vector).to(device)
+            local_discriminator.load_state_dict(torch.load(pretrained_weights[2]))
+        else:
+            model = load_model(args.config, args.pretrained_weights, context=args.context_vector).to(device)
+            wandb.config.update(model.hyperparams)
+            global_discriminator = GlobalDiscriminator(alpha=args.alpha, context=args.context_vector).to(device)
+            local_discriminator = LocalDiscriminator(alpha=args.alpha, context=args.context_vector).to(device)
+    else:
+        model = load_model(args.config, args.pretrained_weights, context=args.context_vector).to(device)
+        wandb.config.update(model.hyperparams)
+        global_discriminator = GlobalDiscriminator(alpha=args.alpha, context=args.context_vector).to(device)
+        local_discriminator = LocalDiscriminator(alpha=args.alpha, context=args.context_vector).to(device)
 
     # create dataloaders
     # mini_batch_size = model.hyperparams['batch'] // model.hyperparams['subdivisions']
     mini_batch_size = hyperparams['batch_size']
-    
+
     source_dataloader = _create_data_loader(
-        os.path.dirname(args.train_path)+f"/train_k_{args.k}.txt",
+        os.path.dirname(args.train_path) + f"/train_k_{args.k}.txt",
         label_path=args.train_label_path,
         batch_size=hyperparams['batch_size'],
         img_size=hyperparams['img_size'],
@@ -54,25 +71,25 @@ def main(args, hyperparams, run):
         strong_aug=args.strong_aug
     )
     target_dataloader = _create_data_loader(
-        os.path.dirname(args.target_train_path)+"/target_train.txt",
+        os.path.dirname(args.target_train_path) + "/target_train.txt",
         batch_size=hyperparams['batch_size'],
         img_size=hyperparams['img_size'],
         n_cpu=args.n_cpu,
         multiscale_training=False
     )
-    
+
     if args.limit_val_size:
         val_filename = f"/target_val_k_{args.k}.txt"
     else:
         val_filename = f"/target_val_k_-1.txt"
 
     validation_dataloader = _create_validation_data_loader(
-        os.path.dirname(args.target_val_path)+val_filename,
+        os.path.dirname(args.target_val_path) + val_filename,
         batch_size=1,
         img_size=hyperparams['img_size'],
         n_cpu=args.n_cpu
     )
-    
+
     # create optimizer
     params = [p for p in model.parameters() if p.requires_grad]
     params_global_classifier = [p for p in global_discriminator.parameters() if p.requires_grad]
@@ -93,6 +110,16 @@ def main(args, hyperparams, run):
         weight_decay=float(hyperparams["decay_disc"])
     )
 
+    # Loss functions
+    # for loss calculations
+    # cross_entropy = nn.CrossEntropyLoss()
+    if args.disc_loss_func == "focal":
+        disc_loss_func = partial(sigmoid_focal_loss, alpha=-1, gamma=3, reduction='mean')
+    elif args.disc_loss_func == "bce":
+        disc_loss_func = torch.nn.BCELoss()
+    else:
+        raise ValueError(f"disc loss func can only be bce or focal, received {args.disc_loss_func}.")
+
     if args.eval_only:
         # Pull out metrics suffix
         metrics_suffix = ""
@@ -101,72 +128,73 @@ def main(args, hyperparams, run):
                 metrics_suffix = "ckpt_best_map"
             elif "ckpt_last" in args.pretrained_weights:
                 metrics_suffix = "ckpt_last"
-            
 
         # validate
         model = validate(
-            model = model,
-            device = device,
-            validation_dataloader = validation_dataloader,
-            class_names = class_names,
-            iou_thresh=hyperparams["iou_thresh"],
-            conf_thresh=hyperparams["conf_thresh"],
-            nms_thresh=hyperparams["nms_thresh"],
-            run=run,
-            metrics_suffix = metrics_suffix
-        )
-        
-    else:
-        # train
-        save_dir = create_save_dir(args)
-        
-        pathlib.Path(save_dir).mkdir(parents=True, exist_ok=True) 
-        
-        # Loss functions
-        # for loss calculations
-        # cross_entropy = nn.CrossEntropyLoss()
-        if args.disc_loss_func == "focal":
-            disc_loss_func = partial(sigmoid_focal_loss, alpha=-1, gamma=3, reduction='mean') 
-        elif args.disc_loss_func == "bce":
-            disc_loss_func = torch.nn.BCELoss()
-        else:
-            raise ValueError(f"disc loss func can only be bce or focal, received {args.disc_loss_func}.")
-        
-        model = train(
             model=model,
             global_discriminator=global_discriminator,
             local_discriminator=local_discriminator,
-            source_dataloader=source_dataloader,
-            device=device,
-            optimizer=optimizer,
-            optimizer_global_classifier=optimizer_global_classifier,
-            optimizer_local_classifier=optimizer_local_classifier,
-            mini_batch_size=mini_batch_size,
-            target_dataloader=target_dataloader,
-            validation_dataloader=validation_dataloader,
-            lambda_discriminator=args.lambda_disc,
-            lambda_mmd=args.lambda_mmd,
             discriminator_loss_function=disc_loss_func,
-            verbose=args.verbose,
-            epochs=args.epochs,
-            save_dir=save_dir,
+            validation_dataloader=validation_dataloader,
+            device=device,
+            mini_batch_size=mini_batch_size,
             class_names=class_names,
             iou_thresh=hyperparams["iou_thresh"],
             conf_thresh=hyperparams["conf_thresh"],
             nms_thresh=hyperparams["nms_thresh"],
+            run=run,
+            metrics_suffix=metrics_suffix
+        )
+
+    else:
+        # train
+        save_dir = create_save_dir(args)
+
+        pathlib.Path(save_dir).mkdir(parents=True, exist_ok=True)
+
+        model = train(
+            model=model,
+            global_discriminator=global_discriminator,
+            local_discriminator=local_discriminator,
+            discriminator_loss_function=disc_loss_func,
+            source_dataloader=source_dataloader,
+            validation_dataloader=validation_dataloader,
+            target_dataloader=target_dataloader,
+            device=device,
+            mini_batch_size=mini_batch_size,
+            class_names=class_names,
+            iou_thresh=hyperparams["iou_thresh"],
+            conf_thresh=hyperparams["conf_thresh"],
+            nms_thresh=hyperparams["nms_thresh"],
+            run=run,
+            optimizer=optimizer,
+            optimizer_global_classifier=optimizer_global_classifier,
+            optimizer_local_classifier=optimizer_local_classifier,
+            lambda_discriminator=args.lambda_disc,
+            lambda_mmd=args.lambda_mmd,
+            verbose=args.verbose,
+            epochs=args.epochs,
+            save_dir=save_dir,
             log_img_every_n_epochs = args.log_img_every_n_epochs,
             log_img_count = args.log_img_count,
-            run=run,
         )
+        
+        def save_weights(model, prefix, type):
+            save_name = f"{prefix}_last_{datetime.today().strftime('%Y-%m-%d_%H-%M-%S')}.pth"
+            save_filepath = os.path.join(save_dir, save_name)
+            torch.save(model.state_dict(), save_filepath)
+            
+            if type == "model":
+                best_model = wandb.Artifact(args.name, type="model")
+                best_model.add_file(save_filepath)
+        
         # save model weights
-        save_name = f"ckpt_last_{datetime.today().strftime('%Y-%m-%d_%H-%M-%S')}.pth"
-        save_filepath = os.path.join(save_dir, save_name)
-        torch.save(model.state_dict(), save_filepath)
-        best_model = wandb.Artifact(args.name, type="model")
-        best_model.add_file(save_filepath)
-        # run.log_artifact(best_model)
-        # run.link_artifact(best_model, "model-registry/yolo-uda")
-    
+        save_weights(model, "ckpt", "model")
+        # log the discriminator weights
+        save_weights(global_discriminator, "global_discriminator", "global_discriminator")
+        save_weights(global_discriminator, "local_discriminator", "local_discriminator")
+        
+
 if __name__ == '__main__':
     ap = argparse.ArgumentParser()
     ap.add_argument("-k", type=int, default=0,
@@ -175,7 +203,7 @@ if __name__ == '__main__':
                     help="Constant for gradient reversal layer")
     ap.add_argument("-l", "--lambda-disc", type=float, default=0.5,
                     help="Weighting for discriminator loss, yolo weight is 1.0")
-    ap.add_argument("--lambda-mmd", type=float, default=0.001,
+    ap.add_argument("--lambda-mmd", type=float, default=0.0,
                     help="Weighting for MMD loss, yolo weight is 1.0")
     ap.add_argument("--lr-global-disc", type=float, default=0.0001,
                     help="Learning rate for global discriminator")
@@ -185,7 +213,7 @@ if __name__ == '__main__':
                     help="Weight decay for discriminator")
     ap.add_argument("--disc-loss-func", type=str, default="focal",
                     help="Note: This only changes the global discriminator. Should be `focal` or `bce`.")
-    ap.add_argument("-b", "--batch-size", type=int, default=2,
+    ap.add_argument("-b", "--batch-size", type=int, default=4,
                     help="Number of samples per batch.")
     ap.add_argument("-t", "--train-path", required=True,
                     help="Path to file containing training images")
@@ -221,6 +249,8 @@ if __name__ == '__main__':
                     help="Which best checkpoint to use in test at end of training.")
     ap.add_argument("--limit-val-size", action="store_true", default=False,
                     help="If flag is passed, val set will be ~k/4, per CropGAN methodology.")
+    ap.add_argument("--context-vector", action="store_true", default=False,
+                    help="If flag is passed, context vector will be used in discriminator.")
     ap.add_argument("--log-img-every-n-epochs", type=int, default=50,
                     help="How frequently to log validation images")
     ap.add_argument("--log-img-count", type=int, default=10,
@@ -247,6 +277,7 @@ if __name__ == '__main__':
         "learning_rate_global_disc": args.lr_global_disc,
         "learning_rate_local_disc": args.lr_local_disc,
         "limit_val_size": args.limit_val_size,
+        "context_vector": args.context_vector,
     }
 
     # update the run name with the domain
@@ -259,7 +290,7 @@ if __name__ == '__main__':
     # initialize wandb
     run = wandb.init(project='yolo-uda', name=args.name)
     wandb.config.update(hyperparams)
-    
+
     # start run
     main(args, hyperparams, run)
 
@@ -268,17 +299,17 @@ if __name__ == '__main__':
         args.eval_only = True
         # Change to the new checkpoint
         save_dir = create_save_dir(args)
-        args.pretrained_weights = os.path.join(save_dir,"ckpt_best_map.pth")
+        args.pretrained_weights = os.path.join(save_dir, "ckpt_best_map.pth")
         args.limit_val_size = False
         # Use test set, not val set
         if args.target_val_path.split("/")[-2] == "valid":
-            args.target_val_path = os.path.join(os.path.dirname(os.path.dirname(args.target_val_path)),"test/images")
+            args.target_val_path = os.path.join(os.path.dirname(os.path.dirname(args.target_val_path)), "test/images")
         else:
             print(f"Running test on target_val_path: {args.target_val_path}")
         main(args, hyperparams, run)
 
         # Test run: last checkpoint
-        weight_files = glob.glob(os.path.join(save_dir,"ckpt_last_*.pth"))
+        weight_files = glob.glob(os.path.join(save_dir, "ckpt_last_*.pth"))
 
         latest_weight, latest_time = "", datetime(2024, 1, 1)
         for weight_file in weight_files:
@@ -292,4 +323,13 @@ if __name__ == '__main__':
             raise FileNotFoundError(f"No weights found at {save_dir}")
 
         args.pretrained_weights = latest_weight
-        main(args, hyperparams, run)
+
+        # add the discriminator weights if context vector is used
+        if args.context_vector:
+            global_discriminator = os.path.join(save_dir, latest_weight.replace("ckpt_last", "global_discriminator_last"))
+            local_discriminator = os.path.join(save_dir, latest_weight.replace("ckpt_last", "local_discriminator_last"))
+            pretrained_weights = [args.pretrained_weights, global_discriminator, local_discriminator]
+
+            main(args, hyperparams, run, pretrained_weights=pretrained_weights)
+        else:
+            main(args, hyperparams, run)

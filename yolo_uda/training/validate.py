@@ -39,6 +39,9 @@ def validate(
     # Evaluate the model on the validation set
     metrics_output = _evaluate(
         model,
+        global_discriminator,
+        local_discriminator,
+        discriminator_loss_function,
         validation_dataloader,
         class_names,
         img_size=model.hyperparams['height'],
@@ -47,7 +50,9 @@ def validate(
         nms_thres=nms_thresh,
         verbose=verbose,
         step=0,
-        num_imgs_to_log=log_img_count
+        num_imgs_to_log=log_img_count,
+        device=device,
+        mini_batch_size=mini_batch_size
     )
     
     if metrics_output is not None:
