@@ -160,7 +160,7 @@ class GlobalDiscriminator(nn.Module):
             nn.BatchNorm2d(num_features=128),
             nn.ReLU(),
             nn.Dropout(p=0.5),
-            nn.AvgPool2d(9),
+            nn.AvgPool2d(18),
             nn.Flatten()
         )
 

@@ -26,7 +26,7 @@ def compose_discriminator_batch(source_features: torch.Tensor, target_features: 
     # target_features[1] = downsample_2(target_features[1])
 
     # Create pixel-wise labels
-    activation_dims = (source_features[1].shape[2], source_features[1].shape[3], 1)
+    activation_dims = (source_features[0].shape[2], source_features[0].shape[3], 1)
     labels_source_pixelwise = labels_source.repeat(activation_dims).permute(2,0,1)
     labels_target_pixelwise = labels_target.repeat(activation_dims).permute(2,0,1)
 
@@ -36,8 +36,8 @@ def compose_discriminator_batch(source_features: torch.Tensor, target_features: 
         "global_features":torch.cat([source_features[1], target_features[1]],axis=0).to(device)
         }
     labels = {
-        "local_labels": torch.cat([labels_source, labels_target],axis=0).to(device),
-        "global_labels": torch.cat([labels_source_pixelwise, labels_target_pixelwise],axis=0).to(device)
+        "local_labels": torch.cat([labels_source_pixelwise, labels_target_pixelwise],axis=0).to(device),
+        "global_labels": torch.cat([labels_source, labels_target],axis=0).to(device),
         }
 
     if shuffle:
