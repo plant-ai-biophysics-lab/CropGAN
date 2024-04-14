@@ -135,9 +135,9 @@ def main(args, hyperparams, run, **kwargs):
             global_discriminator=global_discriminator,
             local_discriminator=local_discriminator,
             discriminator_loss_function=disc_loss_func,
+            validation_dataloader=validation_dataloader,
             device=device,
             mini_batch_size=mini_batch_size,
-            validation_dataloader=validation_dataloader,
             class_names=class_names,
             iou_thresh=hyperparams["iou_thresh"],
             conf_thresh=hyperparams["conf_thresh"],
@@ -156,52 +156,44 @@ def main(args, hyperparams, run, **kwargs):
             model=model,
             global_discriminator=global_discriminator,
             local_discriminator=local_discriminator,
-            source_dataloader=source_dataloader,
-            device=device,
-            optimizer=optimizer,
-            optimizer_global_classifier=optimizer_global_classifier,
-            optimizer_local_classifier=optimizer_local_classifier,
-            mini_batch_size=mini_batch_size,
-            target_dataloader=target_dataloader,
-            validation_dataloader=validation_dataloader,
-            lambda_discriminator=args.lambda_disc,
-            lambda_mmd=args.lambda_mmd,
             discriminator_loss_function=disc_loss_func,
-            verbose=args.verbose,
-            epochs=args.epochs,
-            save_dir=save_dir,
+            source_dataloader=source_dataloader,
+            validation_dataloader=validation_dataloader,
+            target_dataloader=target_dataloader,
+            device=device,
+            mini_batch_size=mini_batch_size,
             class_names=class_names,
             iou_thresh=hyperparams["iou_thresh"],
             conf_thresh=hyperparams["conf_thresh"],
             nms_thresh=hyperparams["nms_thresh"],
+            run=run,
+            optimizer=optimizer,
+            optimizer_global_classifier=optimizer_global_classifier,
+            optimizer_local_classifier=optimizer_local_classifier,
+            lambda_discriminator=args.lambda_disc,
+            lambda_mmd=args.lambda_mmd,
+            verbose=args.verbose,
+            epochs=args.epochs,
+            save_dir=save_dir,
             log_img_every_n_epochs = args.log_img_every_n_epochs,
             log_img_count = args.log_img_count,
-            run=run,
         )
         
+        def save_weights(model, prefix, type):
+            save_name = f"{prefix}_last_{datetime.today().strftime('%Y-%m-%d_%H-%M-%S')}.pth"
+            save_filepath = os.path.join(save_dir, save_name)
+            torch.save(model.state_dict(), save_filepath)
+            
+            if type == "model":
+                best_model = wandb.Artifact(args.name, type="model")
+                best_model.add_file(save_filepath)
+        
         # save model weights
-        save_name = f"ckpt_last_{datetime.today().strftime('%Y-%m-%d_%H-%M-%S')}.pth"
-        save_filepath = os.path.join(save_dir, save_name)
-        torch.save(model.state_dict(), save_filepath)
-        best_model = wandb.Artifact(args.name, type="model")
-        best_model.add_file(save_filepath)
-        # run.log_artifact(best_model)
-        # run.link_artifact(best_model, "model-registry/yolo-uda")
-
+        save_weights(model, "ckpt", "model")
         # log the discriminator weights
-        save_name = f"global_discriminator_last_{datetime.today().strftime('%Y-%m-%d_%H-%M-%S')}.pth"
-        save_filepath = os.path.join(save_dir, save_name)
-        torch.save(global_discriminator.state_dict(), save_filepath)
-        global_discriminator = wandb.Artifact(args.name, type="global_discriminator")
-        global_discriminator.add_file(save_filepath)
-        save_name = f"local_discriminator_last_{datetime.today().strftime('%Y-%m-%d_%H-%M-%S')}.pth"
-        save_filepath = os.path.join(save_dir, save_name)
-        torch.save(local_discriminator.state_dict(), save_filepath)
-        local_discriminator = wandb.Artifact(args.name, type="local_discriminator")
-        local_discriminator.add_file(save_filepath)
-        # run.log_artifact(best_discriminator)
-        # run.link_artifact(best_discriminator, "model-registry/yolo-uda")
-
+        save_weights(global_discriminator, "global_discriminator", "global_discriminator")
+        save_weights(global_discriminator, "local_discriminator", "local_discriminator")
+        
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser()

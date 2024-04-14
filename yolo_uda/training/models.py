@@ -41,7 +41,7 @@ def load_model(model_path, weights_path=None, context=False):
     if weights_path:
         if weights_path.endswith(".pth"):
             # Load checkpoint weights
-            model.load_state_dict(torch.load(weights_path, map_location=device))
+            model.load_state_dict(torch.load(weights_path, map_location=device),strict=False)
         else:
             # Load darknet weights
             model.load_darknet_weights(weights_path)
@@ -445,6 +445,7 @@ class GRLDarknet(Darknet):
             return torch.cat(yolo_outputs, 1)
 
     def forward_with_context(self, x, global_context, local_context, targets=None):
+        num_samples = x.shape[0]
         feature_maps = []
         img_size = x.size(2)
         layer_outputs, yolo_outputs = [], []
