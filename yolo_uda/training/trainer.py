@@ -32,17 +32,17 @@ def compose_discriminator_batch(source_features: torch.Tensor, target_features: 
 
     # Combine source and target batches for discriminator
     features = {
-        "local_features":torch.cat([source_features[0], target_features[0]],axis=0).to(device),
-        "global_features":torch.cat([source_features[1], target_features[1]],axis=0).to(device)
+        "global_features":torch.cat([source_features[0], target_features[0]],axis=0).to(device),
+        "local_features":torch.cat([source_features[1], target_features[1]],axis=0).to(device)
         }
     labels = {
-        "local_labels": torch.cat([labels_source_pixelwise, labels_target_pixelwise],axis=0).to(device),
         "global_labels": torch.cat([labels_source, labels_target],axis=0).to(device),
+        "local_labels": torch.cat([labels_source_pixelwise, labels_target_pixelwise],axis=0).to(device)
         }
 
     if shuffle:
         # Shuffle batch
-        idx = torch.randperm(features['local_features'].shape[0])
+        idx = torch.randperm(features['global_features'].shape[0])
         features_shuffled = {key:value[idx] for key,value in features.items()}
         labels_shuffled = {key:value[idx] for key,value in labels.items()}
         return features_shuffled, labels_shuffled

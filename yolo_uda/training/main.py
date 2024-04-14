@@ -192,7 +192,7 @@ def main(args, hyperparams, run, **kwargs):
         save_weights(model, "ckpt", "model")
         # log the discriminator weights
         save_weights(global_discriminator, "global_discriminator", "global_discriminator")
-        save_weights(global_discriminator, "local_discriminator", "local_discriminator")
+        save_weights(local_discriminator, "local_discriminator", "local_discriminator")
         
 
 if __name__ == '__main__':
