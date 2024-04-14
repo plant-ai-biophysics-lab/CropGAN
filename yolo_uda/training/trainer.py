@@ -32,8 +32,8 @@ def compose_discriminator_batch(source_features: torch.Tensor, target_features: 
 
     # Combine source and target batches for discriminator
     features = {
-        "global_features":torch.cat([source_features[0], target_features[0]],axis=0).to(device),
-        "local_features":torch.cat([source_features[1], target_features[1]],axis=0).to(device)
+        "global_features":torch.cat([source_features[1], target_features[1]],axis=0).to(device),
+        "local_features":torch.cat([source_features[0], target_features[0]],axis=0).to(device)
         }
     labels = {
         "global_labels": torch.cat([labels_source, labels_target],axis=0).to(device),
