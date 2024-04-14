@@ -58,13 +58,6 @@ def compose_discriminator_batch(source_features: torch.Tensor, target_features: 
     # source_features[1] = downsample_2(source_features[1])
     # target_features[1] = downsample_2(target_features[1])
 
-    # only used for yolov3.cfg, not yolov3-tiny.cfg
-    if len(source_features) == 3:
-        source_features[2] = downsample_4(source_features[2])
-    # only used for yolov3.cfg, not yolov3-tiny.cfg
-    if len(target_features) == 3:
-        target_features[2] = downsample_4(target_features[2])
-
     # Create pixel-wise labels
     activation_dims = (source_features[1].shape[2], source_features[1].shape[3], 1)
     labels_source_pixelwise = labels_source.repeat(activation_dims).permute(2,0,1)
