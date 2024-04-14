@@ -9,40 +9,9 @@ from torch.autograd import Variable
 from torchmetrics.classification import BinaryAccuracy
 from pytorchyolo.utils.utils import ap_per_class, get_batch_statistics, non_max_suppression, xywh2xyxy
 
+from trainer import discriminator_step
+
 binary_accuracy = BinaryAccuracy(threshold=0.5).to('cuda')
-
-
-def discriminator_step(
-        global_discriminator,
-        local_discriminator,
-        map_features,
-        labels,
-        mini_batch_size,
-        global_discriminator_loss_function,
-        local_discriminator_loss_function,
-    ):
-
-    """
-    Discriminator step performed between the source and targer domain.
-    Input arguments:
-      map_features: Tensor = feature map obtained from the feature extractor
-      labels: Tensor = ground truth
-    Return:
-      Tensor = cross entropy loss between the prediction and the ground truth.
-    """
-    global_outputs, global_context = global_discriminator(map_features['global_features'])
-    local_outputs, local_context = local_discriminator(map_features['local_features'])
-
-    # calculate accuracy
-    global_discriminator_acc = binary_accuracy(global_outputs, labels['global_labels'])
-    local_discriminator_acc = binary_accuracy(local_outputs, labels['local_labels'])
-    discriminator_acc = {"global_discriminator_acc": global_discriminator_acc, "local_discriminator_acc":local_discriminator_acc}
-
-    # calculate loss
-    global_discriminator_loss = global_discriminator_loss_function(global_outputs, labels['global_labels'].float())
-    local_discriminator_loss = local_discriminator_loss_function(local_outputs, labels['local_labels'].float())
-
-    return global_discriminator_loss, local_discriminator_loss, discriminator_acc, global_context, local_context
 
 
 def compose_discriminator_batch_evaluation(source_features: torch.Tensor,
