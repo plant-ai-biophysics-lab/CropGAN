@@ -333,6 +333,12 @@ class YOLOContextDownsample(nn.Module):
         context = global_context + local_context
         context = context.reshape(x.shape[0], -1, x.shape[2], x.shape[3])
 
+        # log the context
+        wandb.log({
+            "global_context_mean": context.mean().item(),
+            "local_context_mean": local_context.mean().item(),
+        }, commit=False)
+
         context = self.context_downsample(context)
         return x + context
 
@@ -445,6 +451,7 @@ class GRLDarknet(Darknet):
             return torch.cat(yolo_outputs, 1)
 
     def forward_with_context(self, x, global_context, local_context, targets=None):
+        num_samples = x.shape[0]
         feature_maps = []
         img_size = x.size(2)
         layer_outputs, yolo_outputs = [], []
