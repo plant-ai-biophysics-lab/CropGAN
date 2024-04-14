@@ -335,7 +335,7 @@ class YOLOContextDownsample(nn.Module):
 
         # log the context
         wandb.log({
-            "global_context_mean": context.mean().item(),
+            "global_context_mean": global_context.mean().item(),
             "local_context_mean": local_context.mean().item(),
         }, commit=False)
 
