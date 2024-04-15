@@ -140,7 +140,7 @@ class GlobalDiscriminator(nn.Module):
     A 3-layer MLP + Gradient Reversal Layer for domain classification.
     """
 
-    def __init__(self, in_size=255, out_size=1, alpha=1.0, context=False):
+    def __init__(self, in_size=255, out_size=1, alpha=1.0, context=False, use_tiny=True):
         """
         Arguments:
             in_size: size of the input
@@ -160,9 +160,12 @@ class GlobalDiscriminator(nn.Module):
             nn.BatchNorm2d(num_features=128),
             nn.ReLU(),
             nn.Dropout(p=0.5),
-            nn.AvgPool2d(18),
-            nn.Flatten()
         )
+        if use_tiny:
+            self.net.append(nn.AvgPool2d(18))
+        else:
+            self.net.append(nn.AvgPool2d(36))
+        self.net.append(nn.Flatten())
 
         self.out = nn.Sequential(
             nn.Linear(128, out_size),
@@ -364,7 +367,7 @@ class GRLDarknet(Darknet):
         img_size = x.size(2)
         layer_outputs, yolo_outputs = [], []
         # Use different feature map layers if yolov3 vs. yolov3-tiny
-        feature_map_layers = [8,22] if self.use_tiny else [81,105]
+        feature_map_layers = [8,22] if self.use_tiny else [36, 105]
         for i, (module_def, module) in enumerate(zip(self.module_defs, self.module_list)):
             if module_def["type"] in ["convolutional", "upsample", "maxpool"]:
                 x = module(x)
@@ -408,7 +411,7 @@ class GRLDarknet(Darknet):
         img_size = x.size(2)
         layer_outputs, yolo_outputs = [], []
         # Use different feature map layers if yolov3 vs. yolov3-tiny
-        feature_map_layers = [8, 22] if self.use_tiny else [81, 93, 105]
+        feature_map_layers = [8, 22] if self.use_tiny else [36, 105]
         for i, (module_def, module) in enumerate(zip(self.module_defs, self.module_list)):
             if module_def["type"] in ["convolutional", "upsample", "maxpool"]:
                 x = module(x)
@@ -456,7 +459,7 @@ class GRLDarknet(Darknet):
         img_size = x.size(2)
         layer_outputs, yolo_outputs = [], []
         # Use different feature map layers if yolov3 vs. yolov3-tiny
-        feature_map_layers = [8, 22] if self.use_tiny else [81, 93, 105]
+        feature_map_layers = [8, 22] if self.use_tiny else [36, 105]
         for i, (module_def, module) in enumerate(zip(self.module_defs, self.module_list)):
             if module_def["type"] in ["convolutional", "upsample", "maxpool"]:
                 x = module(x)
