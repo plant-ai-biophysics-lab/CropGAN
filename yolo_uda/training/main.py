@@ -37,24 +37,26 @@ def main(args, hyperparams, run, **kwargs):
                  args.limit_val_size)
 
     # load models
+    use_tiny = 'tiny' in args.config
+
     if args.context_vector:
         if 'pretrained_weights' in kwargs:
             pretrained_weights = kwargs['pretrained_weights']
             model = load_model(args.config, pretrained_weights[0], context=args.context_vector).to(device)
             wandb.config.update(model.hyperparams)
-            global_discriminator = GlobalDiscriminator(alpha=args.alpha, context=args.context_vector).to(device)
+            global_discriminator = GlobalDiscriminator(alpha=args.alpha, context=args.context_vector, use_tiny=use_tiny).to(device)
             global_discriminator.load_state_dict(torch.load(pretrained_weights[1]))
             local_discriminator = LocalDiscriminator(alpha=args.alpha, context=args.context_vector).to(device)
             local_discriminator.load_state_dict(torch.load(pretrained_weights[2]))
         else:
             model = load_model(args.config, args.pretrained_weights, context=args.context_vector).to(device)
             wandb.config.update(model.hyperparams)
-            global_discriminator = GlobalDiscriminator(alpha=args.alpha, context=args.context_vector).to(device)
+            global_discriminator = GlobalDiscriminator(alpha=args.alpha, context=args.context_vector, use_tiny=use_tiny).to(device)
             local_discriminator = LocalDiscriminator(alpha=args.alpha, context=args.context_vector).to(device)
     else:
         model = load_model(args.config, args.pretrained_weights, context=args.context_vector).to(device)
         wandb.config.update(model.hyperparams)
-        global_discriminator = GlobalDiscriminator(alpha=args.alpha, context=args.context_vector).to(device)
+        global_discriminator = GlobalDiscriminator(alpha=args.alpha, context=args.context_vector, use_tiny=use_tiny).to(device)
         local_discriminator = LocalDiscriminator(alpha=args.alpha, context=args.context_vector).to(device)
 
     # create dataloaders
