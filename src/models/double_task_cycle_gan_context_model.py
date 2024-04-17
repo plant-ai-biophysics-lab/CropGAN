@@ -13,6 +13,7 @@ from yolo_uda.training.models import GRLDarknet
 import os
 
 from torch.nn import Upsample
+import torch.nn as nn
 
 
 class DoubleTaskCycleGanContextModel(BaseModel):
@@ -360,7 +361,9 @@ class DoubleTaskCycleGanContextModel(BaseModel):
             # loss_yolo_b, self.bbox_outputs = self.netYoloB(self.fake_B * 0.5 + 0.5,
             #                                                self.A_label)  # de-normalize the image before feed into the yolo net
 
-            yolo_b_source_features = self.netYoloB(self.fake_B * 0.5 + 0.5)
+            yolo_b_source_features = self.netYoloB.forward_features(self.fake_B * 0.5 + 0.5,
+                                                                    return_feature_maps=True)
+            print([f.shape for f in yolo_b_source_features], 'feature shapes')
 
             features, disc_labels = compose_discriminator_batch_evaluation(
                 source_features=yolo_b_source_features,
@@ -398,7 +401,8 @@ class DoubleTaskCycleGanContextModel(BaseModel):
             # loss_yolo_a, self.bbox_outputs_a = self.netYoloA(self.fake_labeled_A * 0.5 + 0.5,
             #                                                  self.labeled_B_label)  # de-normalize the image before feed into the yolo net
 
-            yolo_a_source_features = self.netYoloA(self.fake_labeled_A * 0.5 + 0.5)
+            yolo_a_source_features = self.netYoloA.forward_features(self.fake_labeled_A * 0.5 + 0.5,
+                                                                    return_feature_maps=True)
 
             features, disc_labels = compose_discriminator_batch_evaluation(
                 source_features=yolo_a_source_features,
