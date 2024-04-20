@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from models import Upsample
+from yolo_uda.training.models import Upsample
 import tqdm
 import wandb
 import numpy as np
@@ -16,7 +16,6 @@ def discriminator_step(
         local_discriminator,
         map_features,
         labels,
-        mini_batch_size,
         global_discriminator_loss_function,
         local_discriminator_loss_function,
     ):
@@ -44,7 +43,6 @@ def discriminator_step(
     return global_discriminator_loss, local_discriminator_loss, discriminator_acc, global_context, local_context
 
 def compose_discriminator_batch_evaluation(source_features: torch.Tensor,
-                                           mini_batch_size: int,
                                            downsample_2: nn.Module, downsample_4: nn.Module,
                                            labels_source: torch.Tensor,
                                            device: torch.device, shuffle: bool = True):
@@ -160,7 +158,6 @@ def _evaluate(
 
             features, disc_labels = compose_discriminator_batch_evaluation(
                 source_features=source_features,
-                mini_batch_size=mini_batch_size,
                 downsample_2=downsample_2,
                 downsample_4=downsample_4,
                 labels_source=labels_source,

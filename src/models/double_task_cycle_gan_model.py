@@ -4,7 +4,6 @@ from util.image_pool import ImagePool
 from .base_model import BaseModel
 from . import networks
 
-from models.discriminator_utils import GlobalDiscriminator, LocalDiscriminator
 from models.yolo_model import Darknet
 from yolo_uda.training.models import GRLDarknet
 import os
