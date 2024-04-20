@@ -162,9 +162,9 @@ class GlobalDiscriminator(nn.Module):
             nn.Dropout(p=0.5),
         )
         if use_tiny:
-            self.net.append(nn.AvgPool2d(18))
+            self.net.append(nn.AvgPool2d(12))
         else:
-            self.net.append(nn.AvgPool2d(36))
+            self.net.append(nn.AvgPool2d(36)) # TODO: Update this
         self.net.append(nn.Flatten())
 
         self.out = nn.Sequential(
