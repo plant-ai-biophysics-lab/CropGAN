@@ -36,6 +36,7 @@ class TrainOptions(BaseOptions):
         parser.add_argument('--pool_size', type=int, default=50, help='the size of image buffer that stores previously generated images')
         parser.add_argument('--lr_policy', type=str, default='linear', help='learning rate policy. [linear | step | plateau | cosine]')
         parser.add_argument('--lr_decay_iters', type=int, default=50, help='multiply by a gamma every lr_decay_iters iterations')
+        parser.add_argument('--label_epsilon', type=float, default=0.0, help='epsilon for label smoothing')
         # dual step parameters
         parser.add_argument('--yolo_eval_on_real_period', type=int, default=500, help='eval yolo every n epochs')
         parser.add_argument('--yolo_one_shot_file', type=str, default='None', help='the path to a single shot train file (label is the same pattern name) ')
