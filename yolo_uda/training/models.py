@@ -41,10 +41,21 @@ def load_model(model_path, context=False):
     return model
 
 def load_yolo_weights(model, weights_path):
+    """Loads the yolo model from file.
+
+    :param model: Darknet model without weights loaded
+    :type model: GRLDarknet
+    :param weights_path: Path to weights or checkpoint file (.weights or .pth)
+    :type weights_path: str
+    :return: Returns model
+    :rtype: Darknet
+    """
+
     # If pretrained weights are specified, start from checkpoint or weight file
     if weights_path:
         if weights_path.endswith(".pth"):
             # Load checkpoint weights
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
             model.load_state_dict(torch.load(weights_path, map_location=device),strict=False)
         else:
             # Load darknet weights
@@ -848,16 +859,16 @@ class YoloDA(torch.nn.Module):
         nms_thresh: float = 0.5,
         lambda_mmd: float = 0,         
         batch_size = 4, 
-        pretrained_weights=None):
+    ):
         
         yolo_model = load_model(config, context=context).to(device)
         global_discriminator = GlobalDiscriminator(alpha=alpha, context=context, loss_func=global_disc_loss_func, use_tiny=use_tiny).to(device)
         local_discriminator = LocalDiscriminator(alpha=alpha, context=context).to(device)
 
-        if pretrained_weights is not None:
-            yolo_model = load_yolo_weights(yolo_model, pretrained_weights[0])
-            global_discriminator.load_state_dict(torch.load(pretrained_weights[1]))
-            local_discriminator.load_state_dict(torch.load(pretrained_weights[2]))
+        # if pretrained_weights is not None:
+        #     yolo_model = load_yolo_weights(yolo_model, pretrained_weights[0])
+        #     global_discriminator.load_state_dict(torch.load(pretrained_weights[1]))
+        #     local_discriminator.load_state_dict(torch.load(pretrained_weights[2]))
 
         return YoloDA(
             yolo_model=yolo_model, 

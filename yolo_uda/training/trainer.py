@@ -1,6 +1,5 @@
 import os
 from datetime import datetime
-from typing import Callable, Union, Dict, List, Any
 
 import torch
 import tqdm
@@ -12,75 +11,29 @@ from torchmetrics.classification import BinaryAccuracy
 from pytorchyolo.utils.loss import compute_loss
 from pytorchyolo.utils.utils import to_cpu
 from models import Upsample
-from metrics import FeatureMapCosineSimilarity, FeatureMapEuclideanDistance, MMDLoss
+from metrics import FeatureMapCosineSimilarity, FeatureMapEuclideanDistance
 from evaluate import _evaluate
 
 binary_accuracy = BinaryAccuracy(threshold=0.5).to('cuda')
 
 
-# def compose_discriminator_batch(source_features: torch.Tensor, target_features: torch.Tensor,
-#                                 mini_batch_size: int, downsample_2: nn.Module, downsample_4: nn.Module,
-#                                 labels_source: torch.Tensor, labels_target: torch.Tensor,
-#                                 device: torch.device, shuffle: bool = True):
-#     # source_features[1] = downsample_2(source_features[1])
-#     # target_features[1] = downsample_2(target_features[1])
-
-#     # Create pixel-wise labels
-#     activation_dims = (source_features[0].shape[2], source_features[0].shape[3], 1)
-#     labels_source_pixelwise = labels_source.repeat(activation_dims).permute(2,0,1)
-#     labels_target_pixelwise = labels_target.repeat(activation_dims).permute(2,0,1)
-
-#     # Combine source and target batches for discriminator
-#     features = {
-#         "global_features":torch.cat([source_features[1], target_features[1]],axis=0).to(device),
-#         "local_features":torch.cat([source_features[0], target_features[0]],axis=0).to(device)
-#         }
-#     labels = {
-#         "global_labels": torch.cat([labels_source, labels_target],axis=0).to(device),
-#         "local_labels": torch.cat([labels_source_pixelwise, labels_target_pixelwise],axis=0).to(device)
-#         }
-
-#     if shuffle:
-#         # Shuffle batch
-#         idx = torch.randperm(features['global_features'].shape[0])
-#         features_shuffled = {key:value[idx] for key,value in features.items()}
-#         labels_shuffled = {key:value[idx] for key,value in labels.items()}
-#         return features_shuffled, labels_shuffled
-#     return features, labels
-
-
 def train(
     model: nn.Module,
-    # global_discriminator: nn.Module,
-    # local_discriminator: nn.Module,
     source_dataloader: DataLoader,
-    # device: torch.device,
     optimizer: torch.optim.Optimizer,
     optimizer_global_classifier: torch.optim.Optimizer,
     optimizer_local_classifier: torch.optim.Optimizer,
-    # mini_batch_size: int,
     target_dataloader: DataLoader,
     validation_dataloader: DataLoader,
-    # discriminator_loss_function: Union[Callable, nn.Module],
     save_dir: str,
     run: wandb.run,
-    # lambda_discriminator: float = 0.5,
-    # lambda_mmd: float = 0.001,
     verbose: bool = False,
     epochs: int = 10,
     class_names: list = None,
-    # iou_thresh: float = 0.5,
-    # conf_thresh: float = 0.5,
-    # nms_thresh: float = 0.5,
     log_img_every_n_epochs: int = 50,
     log_img_count: int = 10,
-    # metrics_suffix: str = "", # Not used, just mirrors validate interface
 ):
     mini_batch_size = model.batch_size
-    # upsample_4 = Upsample(scale_factor=4, mode="nearest")
-    # upsample_2 = Upsample(scale_factor=2, mode="nearest")
-    # downsample_2 = Upsample(scale_factor=0.5, mode="nearest")
-    # downsample_4 = Upsample(scale_factor=0.25, mode="nearest")
     batches_done = 0
 
     best_map, map_ckpt_name = 0.0, ""
@@ -93,8 +46,6 @@ def train(
 
         # set to training mode
         model.train() # set yolo model to training mode
-        # global_discriminator.train() # set discriminator to training mode
-        # local_discriminator.train()
         # Collect discriminator accuracy over training batches
         # Note: total is the sum of batch-level accuracy, not sample-level accuracy.
         # To get the average for the dataset, divide by the batch count.
@@ -110,79 +61,19 @@ def train(
         euclidean_distance_metrics_l15 = FeatureMapEuclideanDistance(layer="15")
         euclidean_distance_metrics_l22 = FeatureMapEuclideanDistance(layer="22")
 
-        # MMD calculation
-        # mmd_metric = MMDLoss()
-
         # tracker
         updated_lr_this_epoch = False
 
         for batch_i, contents in enumerate(
             tqdm.tqdm(zip(source_dataloader, target_dataloader), desc=f"Training Epoch {epoch}")
         ):
-            # (data_source, data_target) = contents
-
             # # Reset gradients
             optimizer.zero_grad()
             optimizer_global_classifier.zero_grad()
             optimizer_local_classifier.zero_grad()
 
             batches_done = len(target_dataloader) * (epoch-1) + batch_i
-
-            # # get imgs from data
-            # _, imgs_s, targets, labels_source = data_source
-            # _, imgs_t, _, labels_target = data_target
-            # if len(imgs_s) < mini_batch_size or len(imgs_t) < mini_batch_size:
-            #     break
-            # source_imgs = imgs_s.to(device)
-            # target_imgs = imgs_t.to(device)
-            # targets = targets.to(device)
-
-            # # with context, we need to get the global/local features from the yolo model,
-            # # pass them through the discriminator to get the discriminator outputs and context
-            # # vectors, and then pass the context vectors back into the yolo model to get the
-            # # final yolo output -> this requires multiple steps
-
-            # # run source pass
-            # source_features = model.forward_features(source_imgs)
-            # # Run target pass to encode features for classifier
-            # target_features = model.forward_features(target_imgs)
-
-            # features, labels = compose_discriminator_batch(
-            #     source_features=source_features,
-            #     target_features=target_features,
-            #     mini_batch_size=mini_batch_size,
-            #     downsample_2=downsample_2,
-            #     downsample_4=downsample_4,
-            #     labels_source=labels_source,
-            #     labels_target=labels_target,
-            #     device=device
-            # )
-
-            # # discriminator_step handles both global and local
-            # (global_discriminator_loss, local_discriminator_loss, batch_discriminator_acc,
-            #  global_context, local_context) = discriminator_step(
-            #     global_discriminator=global_discriminator,
-            #     local_discriminator=local_discriminator,
-            #     map_features=features,
-            #     labels=labels,
-            #     # mini_batch_size=2 * mini_batch_size,
-            #     global_discriminator_loss_function=discriminator_loss_function,
-            #     local_discriminator_loss_function=nn.MSELoss(),
-            # )
-
-            # # get the source outputs with the context
-            # source_outputs = model.forward_with_context(source_imgs, global_context, local_context)
-
-            # # yolo loss
-            # yolo_loss, loss_components = compute_loss(source_outputs, targets, model)
-
-            # # Calculate average MMD loss per batch
-            # mmd_loss = mmd_metric(source_features[1], target_features[1])
-
-            # # run backward propagation
-            # discriminator_loss = 0.05 * global_discriminator_loss + 0.95 * local_discriminator_loss
-            # loss = yolo_loss + lambda_discriminator * discriminator_loss + lambda_mmd * mmd_loss
-            
+  
             loss, loss_components, batch_discriminator_acc, source_features, target_features = model(batch=contents)
             if loss is None:
                 # catches incomplete training batches
@@ -285,20 +176,12 @@ def train(
 
         metrics_output = _evaluate(
             model,
-            # global_discriminator,
-            # local_discriminator,
-            # discriminator_loss_function,
             validation_dataloader,
             class_names,
             img_size=model.yolo_model.hyperparams['height'],
-            # iou_thres=iou_thresh,
-            # conf_thres=conf_thresh,
-            # nms_thres=nms_thresh,
             verbose=verbose,
             step=batches_done,
             num_imgs_to_log=num_imgs_to_log,
-            # device=device,
-            # mini_batch_size=mini_batch_size
         )
 
         if metrics_output is not None:

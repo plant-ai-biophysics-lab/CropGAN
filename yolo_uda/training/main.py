@@ -36,10 +36,8 @@ def main(args, hyperparams, run, **kwargs):
     prepare_data(args.train_path, args.target_train_path, args.target_val_path, args.k, args.skip_preparation,
                  args.limit_val_size)
 
-
     # Loss functions
     # for loss calculations
-    # cross_entropy = nn.CrossEntropyLoss()
     if args.disc_loss_func == "focal":
         disc_loss_func = partial(sigmoid_focal_loss, alpha=-1, gamma=3, reduction='mean')
     elif args.disc_loss_func == "bce":
@@ -51,14 +49,9 @@ def main(args, hyperparams, run, **kwargs):
     use_tiny = 'tiny' in args.config
 
     if args.context_vector:
-        if 'pretrained_weights' in kwargs:
-            pretrained_weights = kwargs['pretrained_weights']
-        else:
-            pretrained_weights = None
         model = YoloDA.create_from_config(
             config=args.config,
             context=args.context_vector,
-            pretrained_weights=pretrained_weights,
             alpha=args.alpha,
             use_tiny=use_tiny,
             batch_size=args.batch_size,
@@ -70,6 +63,13 @@ def main(args, hyperparams, run, **kwargs):
             lambda_discriminator= args.lambda_disc,
             device=device
             )
+        if args.pretrained_weights is not None:
+            if args.pretrained_weights.endswith(".pth"):
+                # Load checkpoint weights
+                model.load_state_dict(torch.load(args.pretrained_weights, map_location=device),strict=False)
+        else:
+            # Load darknet weights
+            model.yolo_model = load_yolo_weights(model.yolo_model, args.pretrained_weights)
         wandb.config.update(model.yolo_model.hyperparams)
     else:
         model = load_model(args.config, context=args.context_vector).to(device)
@@ -81,9 +81,6 @@ def main(args, hyperparams, run, **kwargs):
         wandb.config.update(model.yolo_model.hyperparams)
 
     # create dataloaders
-    # mini_batch_size = model.hyperparams['batch'] // model.hyperparams['subdivisions']
-    # mini_batch_size = hyperparams['batch_size']
-
     source_dataloader = _create_data_loader(
         os.path.dirname(args.train_path) + f"/train_k_{args.k}.txt",
         label_path=args.train_label_path,
@@ -146,17 +143,9 @@ def main(args, hyperparams, run, **kwargs):
 
         # validate
         model = validate(
-            model=model.yolo_model,
-            global_discriminator=model.global_discriminator,
-            local_discriminator=model.local_discriminator,
-            discriminator_loss_function=disc_loss_func,
+            model=model,
             validation_dataloader=validation_dataloader,
-            device=device,
-            # mini_batch_size=mini_batch_size,
             class_names=class_names,
-            iou_thresh=hyperparams["iou_thresh"],
-            conf_thresh=hyperparams["conf_thresh"],
-            nms_thresh=hyperparams["nms_thresh"],
             run=run,
             metrics_suffix=metrics_suffix
         )
@@ -169,24 +158,14 @@ def main(args, hyperparams, run, **kwargs):
 
         model = train(
             model=model,
-            # global_discriminator=model.global_discriminator,
-            # local_discriminator=model.local_discriminator,
-            # discriminator_loss_function=disc_loss_func,
             source_dataloader=source_dataloader,
             validation_dataloader=validation_dataloader,
             target_dataloader=target_dataloader,
-            # device=device,
-            # mini_batch_size=mini_batch_size,
             class_names=class_names,
-            # iou_thresh=hyperparams["iou_thresh"],
-            # conf_thresh=hyperparams["conf_thresh"],
-            # nms_thresh=hyperparams["nms_thresh"],
             run=run,
             optimizer=optimizer,
             optimizer_global_classifier=optimizer_global_classifier,
             optimizer_local_classifier=optimizer_local_classifier,
-            # lambda_discriminator=args.lambda_disc,
-            # lambda_mmd=args.lambda_mmd,
             verbose=args.verbose,
             epochs=args.epochs,
             save_dir=save_dir,
@@ -194,22 +173,13 @@ def main(args, hyperparams, run, **kwargs):
             log_img_count = args.log_img_count,
         )
         
-        #TODO: update this for YoloDA
-        def save_weights(model, prefix, type):
-            save_name = f"{prefix}_last_{datetime.today().strftime('%Y-%m-%d_%H-%M-%S')}.pth"
-            save_filepath = os.path.join(save_dir, save_name)
-            torch.save(model.state_dict(), save_filepath)
-            
-            if type == "model":
-                best_model = wandb.Artifact(args.name, type="model")
-                best_model.add_file(save_filepath)
+        save_name = f"ckpt_last_{datetime.today().strftime('%Y-%m-%d_%H-%M-%S')}.pth"
+        save_filepath = os.path.join(save_dir, save_name)
+        torch.save(model.state_dict(), save_filepath)
         
-        # save model weights
-        save_weights(model, "ckpt", "model")
-        # log the discriminator weights
-        save_weights(global_discriminator, "global_discriminator", "global_discriminator")
-        save_weights(local_discriminator, "local_discriminator", "local_discriminator")
-        
+        best_model = wandb.Artifact(args.name, type="model")
+        best_model.add_file(save_filepath)
+    
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser()
@@ -339,13 +309,6 @@ if __name__ == '__main__':
             raise FileNotFoundError(f"No weights found at {save_dir}")
 
         args.pretrained_weights = latest_weight
-
-        # add the discriminator weights if context vector is used
-        if args.context_vector:
-            global_discriminator = os.path.join(save_dir, latest_weight.replace("ckpt_last", "global_discriminator_last"))
-            local_discriminator = os.path.join(save_dir, latest_weight.replace("ckpt_last", "local_discriminator_last"))
-            pretrained_weights = [args.pretrained_weights, global_discriminator, local_discriminator]
-
-            main(args, hyperparams, run, pretrained_weights=pretrained_weights)
-        else:
-            main(args, hyperparams, run)
+        
+        main(args, hyperparams, run)
+        
