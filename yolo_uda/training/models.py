@@ -21,7 +21,7 @@ sys.path.append(os.path.dirname(os.path.dirname(sys.path[0])))
 from src.models.yolo_model import Darknet
 
 
-def load_model(model_path, weights_path=None, context=False):
+def load_model(model_path, context=False):
     """Loads the yolo model from file.
 
     :param model_path: Path to model definition file (.cfg)
@@ -37,6 +37,9 @@ def load_model(model_path, weights_path=None, context=False):
 
     model.apply(weights_init_normal)
 
+    return model
+
+def load_yolo_weights(model, weights_path):
     # If pretrained weights are specified, start from checkpoint or weight file
     if weights_path:
         if weights_path.endswith(".pth"):
@@ -162,7 +165,7 @@ class GlobalDiscriminator(nn.Module):
             nn.Dropout(p=0.5),
         )
         if use_tiny:
-            self.net.append(nn.AvgPool2d(12))
+            self.net.append(nn.AvgPool2d(12)) # TODO: make flexible for cropped and non-cropped
         else:
             self.net.append(nn.AvgPool2d(36)) # TODO: Update this
         self.net.append(nn.Flatten())
@@ -626,3 +629,39 @@ class GRLDarknet(Darknet):
             output_filters.append(filters)
 
         return hyperparams, module_list
+    
+
+
+#####################
+###   Full Model  ###
+#####################
+
+class YoloDA(torch.nn.Module):
+    def __init__(self, 
+                 yolo_model: GRLDarknet, 
+                 global_discriminator: GlobalDiscriminator, 
+                 local_discriminator: LocalDiscriminator
+                ):
+        super().__init__()
+        
+        self.yolo_model = yolo_model
+        self.global_discriminator = global_discriminator
+        self.local_discriminator = local_discriminator
+
+    @classmethod
+    def create_from_config(cls, config, context, alpha, use_tiny, device, pretrained_weights=None):
+        
+        yolo_model = load_model(config, context=context).to(device)
+        global_discriminator = GlobalDiscriminator(alpha=alpha, context=context, use_tiny=use_tiny).to(device)
+        local_discriminator = LocalDiscriminator(alpha=alpha, context=context).to(device)
+
+        if pretrained_weights is not None:
+            yolo_model = load_yolo_weights(yolo_model, pretrained_weights[0])
+            global_discriminator.load_state_dict(torch.load(pretrained_weights[1]))
+            local_discriminator.load_state_dict(torch.load(pretrained_weights[2]))
+
+        return YoloDA(
+            yolo_model=yolo_model, 
+            global_discriminator=global_discriminator, 
+            local_discriminator=local_discriminator
+        )

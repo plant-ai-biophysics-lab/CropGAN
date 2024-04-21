@@ -13,7 +13,7 @@ from torchvision import transforms
 # from pytorchyolo.test import _create_validation_data_loader
 
 from loader import prepare_data, _create_data_loader, _create_validation_data_loader
-from models import load_model, GlobalDiscriminator, LocalDiscriminator, Upsample
+from models import load_model, load_yolo_weights, YoloDA, LocalDiscriminator, GlobalDiscriminator
 from trainer import train
 from validate import validate
 from datetime import datetime
@@ -42,22 +42,25 @@ def main(args, hyperparams, run, **kwargs):
     if args.context_vector:
         if 'pretrained_weights' in kwargs:
             pretrained_weights = kwargs['pretrained_weights']
-            model = load_model(args.config, pretrained_weights[0], context=args.context_vector).to(device)
-            wandb.config.update(model.hyperparams)
-            global_discriminator = GlobalDiscriminator(alpha=args.alpha, context=args.context_vector, use_tiny=use_tiny).to(device)
-            global_discriminator.load_state_dict(torch.load(pretrained_weights[1]))
-            local_discriminator = LocalDiscriminator(alpha=args.alpha, context=args.context_vector).to(device)
-            local_discriminator.load_state_dict(torch.load(pretrained_weights[2]))
         else:
-            model = load_model(args.config, args.pretrained_weights, context=args.context_vector).to(device)
-            wandb.config.update(model.hyperparams)
-            global_discriminator = GlobalDiscriminator(alpha=args.alpha, context=args.context_vector, use_tiny=use_tiny).to(device)
-            local_discriminator = LocalDiscriminator(alpha=args.alpha, context=args.context_vector).to(device)
+            pretrained_weights = None
+        model = YoloDA.create_from_config(
+            config=args.config,
+            context=args.context_vector,
+            pretrained_weights=pretrained_weights,
+            alpha=args.alpha,
+            use_tiny=use_tiny,
+            device=device
+            )
+        wandb.config.update(model.yolo_model.hyperparams)
     else:
-        model = load_model(args.config, args.pretrained_weights, context=args.context_vector).to(device)
-        wandb.config.update(model.hyperparams)
+        model = load_model(args.config, context=args.context_vector).to(device)
         global_discriminator = GlobalDiscriminator(alpha=args.alpha, context=args.context_vector, use_tiny=use_tiny).to(device)
         local_discriminator = LocalDiscriminator(alpha=args.alpha, context=args.context_vector).to(device)
+
+        if  args.pretrained_weights is not None:
+            model = load_yolo_weights(model, args.pretrained_weights)
+        wandb.config.update(model.yolo_model.hyperparams)
 
     # create dataloaders
     # mini_batch_size = model.hyperparams['batch'] // model.hyperparams['subdivisions']
@@ -93,13 +96,13 @@ def main(args, hyperparams, run, **kwargs):
     )
 
     # create optimizer
-    params = [p for p in model.parameters() if p.requires_grad]
-    params_global_classifier = [p for p in global_discriminator.parameters() if p.requires_grad]
-    params_local_classifier = [p for p in local_discriminator.parameters() if p.requires_grad]
+    params = [p for p in model.yolo_model.parameters() if p.requires_grad]
+    params_global_classifier = [p for p in model.global_discriminator.parameters() if p.requires_grad]
+    params_local_classifier = [p for p in model.local_discriminator.parameters() if p.requires_grad]
     optimizer = optim.Adam(
         params,
-        lr=float(model.hyperparams['learning_rate']),
-        weight_decay=float(model.hyperparams['decay'])
+        lr=float(model.yolo_model.hyperparams['learning_rate']),
+        weight_decay=float(model.yolo_model.hyperparams['decay'])
     )
     optimizer_global_classifier = optim.Adam(
         params_global_classifier,
@@ -133,9 +136,9 @@ def main(args, hyperparams, run, **kwargs):
 
         # validate
         model = validate(
-            model=model,
-            global_discriminator=global_discriminator,
-            local_discriminator=local_discriminator,
+            model=model.yolo_model,
+            global_discriminator=model.global_discriminator,
+            local_discriminator=model.local_discriminator,
             discriminator_loss_function=disc_loss_func,
             validation_dataloader=validation_dataloader,
             device=device,
@@ -155,9 +158,9 @@ def main(args, hyperparams, run, **kwargs):
         pathlib.Path(save_dir).mkdir(parents=True, exist_ok=True)
 
         model = train(
-            model=model,
-            global_discriminator=global_discriminator,
-            local_discriminator=local_discriminator,
+            model=model.yolo_model,
+            global_discriminator=model.global_discriminator,
+            local_discriminator=model.local_discriminator,
             discriminator_loss_function=disc_loss_func,
             source_dataloader=source_dataloader,
             validation_dataloader=validation_dataloader,

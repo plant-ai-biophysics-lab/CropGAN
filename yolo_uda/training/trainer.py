@@ -164,7 +164,7 @@ def train(
                 local_discriminator=local_discriminator,
                 map_features=features,
                 labels=labels,
-                mini_batch_size=2 * mini_batch_size,
+                # mini_batch_size=2 * mini_batch_size,
                 global_discriminator_loss_function=discriminator_loss_function,
                 local_discriminator_loss_function=nn.MSELoss(),
             )
