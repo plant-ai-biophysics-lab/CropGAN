@@ -1,6 +1,6 @@
 import os
 from datetime import datetime
-from typing import Callable, Union, Dict, List, Any 
+from typing import Callable, Union, Dict, List, Any
 
 import torch
 import tqdm
@@ -13,42 +13,9 @@ from pytorchyolo.utils.loss import compute_loss
 from pytorchyolo.utils.utils import to_cpu
 from models import Upsample
 from metrics import FeatureMapCosineSimilarity, FeatureMapEuclideanDistance, MMDLoss
-from evaluate import _evaluate
+from evaluate import discriminator_step, _evaluate
 
 binary_accuracy = BinaryAccuracy(threshold=0.5).to('cuda')
-
-
-def discriminator_step(
-      global_discriminator,
-      local_discriminator,
-      map_features, 
-      labels,
-      mini_batch_size,
-      global_discriminator_loss_function,
-      local_discriminator_loss_function
-    ) -> None:
-
-    """ 
-    Discriminator step performed between the source and targer domain. 
-    Input arguments:
-      map_features: Tensor = feature map obtained from the feature extractor
-      labels: Tensor = ground truth
-    Return:
-      Tensor = cross entropy loss between the prediction and the ground truth.
-    """
-    global_outputs = global_discriminator(map_features['global_features'])
-    local_outputs = local_discriminator(map_features['local_features'])
-    
-    # calculate accuracy
-    global_discriminator_acc = binary_accuracy(global_outputs, labels['global_labels'])
-    local_discriminator_acc = binary_accuracy(local_outputs, labels['local_labels'])
-    discriminator_acc = {"global_discriminator_acc":global_discriminator_acc, "local_discriminator_acc":local_discriminator_acc}
-    
-    # calculate loss
-    global_discriminator_loss = global_discriminator_loss_function(global_outputs, labels['global_labels'].float())
-    local_discriminator_loss = local_discriminator_loss_function(local_outputs, labels['local_labels'].float())
-    
-    return global_discriminator_loss, local_discriminator_loss, discriminator_acc
 
 
 def compose_discriminator_batch(source_features: torch.Tensor, target_features: torch.Tensor,
@@ -58,28 +25,21 @@ def compose_discriminator_batch(source_features: torch.Tensor, target_features: 
     # source_features[1] = downsample_2(source_features[1])
     # target_features[1] = downsample_2(target_features[1])
 
-    # only used for yolov3.cfg, not yolov3-tiny.cfg
-    if len(source_features) == 3:
-        source_features[2] = downsample_4(source_features[2])
-    # only used for yolov3.cfg, not yolov3-tiny.cfg
-    if len(target_features) == 3:
-        target_features[2] = downsample_4(target_features[2])
-    
     # Create pixel-wise labels
-    activation_dims = (source_features[1].shape[2], source_features[1].shape[3], 1)
+    activation_dims = (source_features[0].shape[2], source_features[0].shape[3], 1)
     labels_source_pixelwise = labels_source.repeat(activation_dims).permute(2,0,1)
     labels_target_pixelwise = labels_target.repeat(activation_dims).permute(2,0,1)
 
     # Combine source and target batches for discriminator
     features = {
-        "global_features":torch.cat([source_features[0], target_features[0]],axis=0).to(device),
-        "local_features":torch.cat([source_features[1], target_features[1]],axis=0).to(device)
+        "global_features":torch.cat([source_features[1], target_features[1]],axis=0).to(device),
+        "local_features":torch.cat([source_features[0], target_features[0]],axis=0).to(device)
         }
     labels = {
         "global_labels": torch.cat([labels_source, labels_target],axis=0).to(device),
         "local_labels": torch.cat([labels_source_pixelwise, labels_target_pixelwise],axis=0).to(device)
         }
-    
+
     if shuffle:
         # Shuffle batch
         idx = torch.randperm(features['global_features'].shape[0])
@@ -87,7 +47,7 @@ def compose_discriminator_batch(source_features: torch.Tensor, target_features: 
         labels_shuffled = {key:value[idx] for key,value in labels.items()}
         return features_shuffled, labels_shuffled
     return features, labels
-    
+
 
 def train(
     model: nn.Module,
@@ -135,12 +95,12 @@ def train(
         global_discriminator.train() # set discriminator to training mode
         local_discriminator.train()
         # Collect discriminator accuracy over training batches
-        # Note: total is the sum of batch-level accuracy, not sample-level accuracy. 
+        # Note: total is the sum of batch-level accuracy, not sample-level accuracy.
         # To get the average for the dataset, divide by the batch count.
         global_discriminator_acc = {"total": 0, "batch_count": 0, "batch_size": mini_batch_size*2}
         local_discriminator_acc = {"total": 0, "batch_count": 0, "batch_size": mini_batch_size*2}
-       
-        ## Feature map similarity metrics
+
+        # Feature map similarity metrics
         # Cosine similarity metrics
         cosine_similarity_metrics_l15 = FeatureMapCosineSimilarity(layer="15")
         cosine_similarity_metrics_l22 = FeatureMapCosineSimilarity(layer="22")
@@ -148,7 +108,7 @@ def train(
         # Euclidean distance metrics
         euclidean_distance_metrics_l15 = FeatureMapEuclideanDistance(layer="15")
         euclidean_distance_metrics_l22 = FeatureMapEuclideanDistance(layer="22")
-        
+
         # MMD calculation
         mmd_metric = MMDLoss()
 
@@ -175,34 +135,45 @@ def train(
             source_imgs = imgs_s.to(device)
             target_imgs = imgs_t.to(device)
             targets = targets.to(device)
-            
+
+            # with context, we need to get the global/local features from the yolo model,
+            # pass them through the discriminator to get the discriminator outputs and context
+            # vectors, and then pass the context vectors back into the yolo model to get the
+            # final yolo output -> this requires multiple steps
+
             # run source pass
-            source_outputs, source_features = model(source_imgs)
+            source_features = model.forward_features(source_imgs)
             # Run target pass to encode features for classifier
-            target_outputs, target_features = model(target_imgs)
-            # yolo loss
-            yolo_loss, loss_components = compute_loss(source_outputs, targets, model)
-            
+            target_features = model.forward_features(target_imgs)
+
             features, labels = compose_discriminator_batch(
-                source_features=source_features, 
-                target_features=target_features, 
-                mini_batch_size=mini_batch_size, 
-                downsample_2=downsample_2, 
+                source_features=source_features,
+                target_features=target_features,
+                mini_batch_size=mini_batch_size,
+                downsample_2=downsample_2,
                 downsample_4=downsample_4,
                 labels_source=labels_source,
                 labels_target=labels_target,
-                device=device)
-            
-            # discriminator_step hanldes both global and local
-            global_discriminator_loss, local_discriminator_loss, batch_discriminator_acc = discriminator_step(
-                global_discriminator=global_discriminator, 
-                local_discriminator=local_discriminator, 
-                map_features=features, 
-                labels=labels, 
-                mini_batch_size=2*mini_batch_size, 
-                global_discriminator_loss_function=discriminator_loss_function,
-                local_discriminator_loss_function=nn.MSELoss()
+                device=device
             )
+
+            # discriminator_step handles both global and local
+            (global_discriminator_loss, local_discriminator_loss, batch_discriminator_acc,
+             global_context, local_context) = discriminator_step(
+                global_discriminator=global_discriminator,
+                local_discriminator=local_discriminator,
+                map_features=features,
+                labels=labels,
+                mini_batch_size=2 * mini_batch_size,
+                global_discriminator_loss_function=discriminator_loss_function,
+                local_discriminator_loss_function=nn.MSELoss(),
+            )
+
+            # get the source outputs with the context
+            source_outputs = model.forward_with_context(source_imgs, global_context, local_context)
+
+            # yolo loss
+            yolo_loss, loss_components = compute_loss(source_outputs, targets, model)
 
             # Calculate average MMD loss per batch
             mmd_loss = mmd_metric(source_features[1], target_features[1])
@@ -248,7 +219,7 @@ def train(
             # set learning rate
             for g in optimizer.param_groups:
                 g['lr'] = lr
-                
+
             # Run optimizer
             optimizer.step()
             optimizer_global_classifier.step()
@@ -265,12 +236,12 @@ def train(
             # *_features[0] and *_features[1] are the feature maps of different yolo layers.
             cosine_similarity_metrics_l15.update(source_features=source_features[0],target_features=target_features[0])
             cosine_similarity_metrics_l22.update(source_features=source_features[1],target_features=target_features[1])
-        
+
             # Update euclidean distance metrics
             euclidean_distance_metrics_l15.update(source_features=source_features[0],target_features=target_features[0])
             euclidean_distance_metrics_l22.update(source_features=source_features[1],target_features=target_features[1])
-            
-                      
+
+
             # log progress
             if verbose:
                 print(AsciiTable(
@@ -297,7 +268,7 @@ def train(
         # Discriminator accuracy
         wandb.log({"glob_dscm_acc": global_discriminator_acc["total"] / global_discriminator_acc["batch_count"]}, step=batches_done)
         wandb.log({"loc_dscm_acc": local_discriminator_acc["total"] / local_discriminator_acc["batch_count"]}, step=batches_done)
-        
+
         # Average cosine similarity within source, within target, and across source-target
         # For both feature layers
         for metric in [cosine_similarity_metrics_l15, cosine_similarity_metrics_l22, euclidean_distance_metrics_l15, euclidean_distance_metrics_l22, mmd_metric]:
@@ -316,6 +287,9 @@ def train(
 
         metrics_output = _evaluate(
             model,
+            global_discriminator,
+            local_discriminator,
+            discriminator_loss_function,
             validation_dataloader,
             class_names,
             img_size=model.hyperparams['height'],
@@ -324,7 +298,9 @@ def train(
             nms_thres=nms_thresh,
             verbose=verbose,
             step=batches_done,
-            num_imgs_to_log=num_imgs_to_log
+            num_imgs_to_log=num_imgs_to_log,
+            device=device,
+            mini_batch_size=mini_batch_size
         )
 
         if metrics_output is not None:
@@ -372,6 +348,6 @@ def train(
                 torch.save(model.state_dict(),
                            os.path.join(save_dir, f1_ckpt_name))
 
-    
+
     return model
 

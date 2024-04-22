@@ -3,8 +3,11 @@ import math
 
 import torch
 import torch.nn.functional as F
+import numpy as np
 
 from torch import nn
+from sklearn.manifold import TSNE
+from sklearn.preprocessing import StandardScaler
 
 class FeatureMapMetric:
     def __init__(self, layer: str = "", device: str = "cuda"):
@@ -132,3 +135,35 @@ class MMDLoss(nn.Module):
         self.mmd_loss += mmd_loss
         self.batch_count += 1
         return mmd_loss
+
+### t-SNE algorithm ###
+class TSNEVisualizer:
+    def __init__(self, n_components=2, perplexity=30.0, init='pca'):
+        """
+        Initialize t-SNE visualizer, reference: https://scikit-learn.org/stable/modules/generated/sklearn.manifold.TSNE.html
+
+        Parameters:
+        - n_components (int): The dimension of the embedded space
+        - perplexity (float): The number of nearest neighbors
+        - init (string): Initialization of embedding
+        """
+
+        self.n_components = n_components
+        self.perplexity = perplexity
+        self.init = init
+        self.divergence = []
+
+    def run_tsne(self, x: np.ndarray):
+        """
+        Normalizes the features using a standard scaler and then runs the t-SNE algorithm.
+
+        Parameters:
+        - x (np.ndarray): feature dataset of shape (n_samples, n_features)
+        """
+        # flatten the data
+
+        # normalize the data
+
+        # fit the transform
+        
+        pass
