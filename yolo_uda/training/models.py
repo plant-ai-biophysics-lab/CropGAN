@@ -687,13 +687,13 @@ class YoloDA(torch.nn.Module):
             return self.forward_eval(batch)
 
     def forward_eval(self, batch):
-        # batch is a dict with keys: imgs and labels_source
+        # batch is a dict with keys: imgs and domain_labels
         
         source_features = self.yolo_model.forward_features(batch["imgs"], return_feature_maps=True)
 
         features, disc_labels = self.compose_discriminator_batch(
                 source_features=source_features,
-                labels_source=batch["labels_source"],
+                labels_source=batch["domain_labels"],
                 shuffle=True, #TODO: Should this be False?
             )
 
@@ -702,7 +702,7 @@ class YoloDA(torch.nn.Module):
             global_context, local_context) = self.discriminator_step(
             map_features=features,
             labels=disc_labels,
-        )        
+        )
 
         # duplicate along the first dimension for the global and local context
         global_context = global_context.repeat(2, 1)
@@ -711,6 +711,11 @@ class YoloDA(torch.nn.Module):
         # get the source outputs with the context
         outputs = self.yolo_model.forward_with_context(batch["imgs"], global_context, local_context)
         outputs = non_max_suppression(outputs, conf_thres=self.conf_thresh, iou_thres=self.nms_thresh)
+
+        # # yolo loss if targets provided in batch (for CropGAN use)
+        if "targets" in batch:
+            yolo_loss, loss_components = compute_loss(outputs, batch["targets"], self.yolo_model)
+            return yolo_loss, outputs
 
         return outputs
 

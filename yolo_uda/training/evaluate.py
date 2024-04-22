@@ -61,7 +61,7 @@ def _evaluate(
     # Log bboxes to W&B
     imgs_to_log = []
     
-    for _, imgs, targets, labels_source in tqdm.tqdm(dataloader, desc="Validating"):
+    for _, imgs, targets, domain_labels in tqdm.tqdm(dataloader, desc="Validating"):
         # Extract labels
         labels += targets[:, 1].tolist()
         # Rescale target
@@ -71,7 +71,7 @@ def _evaluate(
         imgs = Variable(imgs.type(Tensor), requires_grad=False)
 
         with torch.no_grad():
-            batch = {"imgs":imgs, "labels_source":labels_source}
+            batch = {"imgs":imgs, "domain_labels":domain_labels}
             outputs = model(batch)
 
         sample_metrics += get_batch_statistics(outputs, targets, iou_threshold=model.iou_thresh)
