@@ -177,7 +177,7 @@ class GlobalDiscriminator(nn.Module):
             nn.Dropout(p=0.5),
         )
         if use_tiny:
-            self.net.append(nn.AvgPool2d(12)) # TODO: make flexible for cropped and non-cropped
+            self.net.append(nn.AvgPool2d(18)) # TODO: make flexible for cropped and non-cropped
         else:
             self.net.append(nn.AvgPool2d(36)) # TODO: Update this
         self.net.append(nn.Flatten())

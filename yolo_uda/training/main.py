@@ -8,12 +8,9 @@ import wandb
 import torch
 import torch.optim as optim
 from torchvision.ops import sigmoid_focal_loss
-from PIL import Image
-from torchvision import transforms
-# from pytorchyolo.test import _create_validation_data_loader
 
 from loader import prepare_data, _create_data_loader, _create_validation_data_loader
-from models import load_model, load_yolo_weights, YoloDA, LocalDiscriminator, GlobalDiscriminator
+from models import load_model, load_yolo_weights, YoloDA
 from trainer import train
 from validate import validate
 from datetime import datetime
@@ -48,37 +45,28 @@ def main(args, hyperparams, run, **kwargs):
     # load models
     use_tiny = 'tiny' in args.config
 
-    if args.context_vector:
-        model = YoloDA.create_from_config(
-            config=args.config,
-            context=args.context_vector,
-            alpha=args.alpha,
-            use_tiny=use_tiny,
-            batch_size=args.batch_size,
-            global_disc_loss_func=disc_loss_func,
-            iou_thresh=hyperparams["iou_thresh"],
-            conf_thresh=hyperparams["conf_thresh"],
-            nms_thresh=hyperparams["nms_thresh"],
-            lambda_mmd= args.lambda_mmd,
-            lambda_discriminator= args.lambda_disc,
-            device=device
-            )
-        if args.pretrained_weights is not None:
-            if args.pretrained_weights.endswith(".pth"):
-                # Load checkpoint weights
-                model.load_state_dict(torch.load(args.pretrained_weights, map_location=device),strict=False)
-        else:
-            # Load darknet weights
-            model.yolo_model = load_yolo_weights(model.yolo_model, args.pretrained_weights)
-        wandb.config.update(model.yolo_model.hyperparams)
+    model = YoloDA.create_from_config(
+        config=args.config,
+        context=args.context_vector,
+        alpha=args.alpha,
+        use_tiny=use_tiny,
+        batch_size=args.batch_size,
+        global_disc_loss_func=disc_loss_func,
+        iou_thresh=hyperparams["iou_thresh"],
+        conf_thresh=hyperparams["conf_thresh"],
+        nms_thresh=hyperparams["nms_thresh"],
+        lambda_mmd= args.lambda_mmd,
+        lambda_discriminator= args.lambda_disc,
+        device=device
+        )
+    if args.pretrained_weights is not None:
+        if args.pretrained_weights.endswith(".pth"):
+            # Load checkpoint weights
+            model.load_state_dict(torch.load(args.pretrained_weights, map_location=device),strict=False)
     else:
-        model = load_model(args.config, context=args.context_vector).to(device)
-        global_discriminator = GlobalDiscriminator(alpha=args.alpha, context=args.context_vector, loss_func=disc_loss_func, use_tiny=use_tiny).to(device)
-        local_discriminator = LocalDiscriminator(alpha=args.alpha, context=args.context_vector).to(device)
-
-        if  args.pretrained_weights is not None:
-            model = load_yolo_weights(model, args.pretrained_weights)
-        wandb.config.update(model.yolo_model.hyperparams)
+        # Load darknet weights
+        model.yolo_model = load_yolo_weights(model.yolo_model, args.pretrained_weights)
+    wandb.config.update(model.yolo_model.hyperparams)
 
     # create dataloaders
     source_dataloader = _create_data_loader(
