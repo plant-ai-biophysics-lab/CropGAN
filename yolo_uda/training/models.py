@@ -16,7 +16,7 @@ import torch.nn.functional as F
 from torchmetrics.classification import BinaryAccuracy
 import wandb
 
-from metrics import FeatureMapCosineSimilarity, FeatureMapEuclideanDistance, MMDLoss
+from yolo_uda.training.metrics import FeatureMapCosineSimilarity, FeatureMapEuclideanDistance, MMDLoss
 
 sys.path.append(os.path.dirname(os.path.dirname(sys.path[0])))
 from src.models.yolo_model import Darknet
@@ -177,7 +177,7 @@ class GlobalDiscriminator(nn.Module):
             nn.Dropout(p=0.5),
         )
         if use_tiny:
-            self.net.append(nn.AvgPool2d(18)) # TODO: make flexible for cropped and non-cropped
+            self.net.append(nn.AvgPool2d(12)) # TODO: make flexible for cropped and non-cropped
         else:
             self.net.append(nn.AvgPool2d(36)) # TODO: Update this
         self.net.append(nn.Flatten())
@@ -816,7 +816,7 @@ class YoloDA(torch.nn.Module):
         global_disc_loss_func, 
         lambda_discriminator: float,
         iou_thresh: float = 0.5,
-        conf_thresh: float = 0.5,
+        conf_thresh: float = 0.3,
         nms_thresh: float = 0.5,
         lambda_mmd: float = 0,         
         batch_size = 4, 
