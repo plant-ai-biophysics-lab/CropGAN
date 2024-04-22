@@ -379,50 +379,6 @@ class GRLDarknet(Darknet):
         self.context_fusion = YOLOContextDownsample(use_context=context)
         self.gradient_tracker = GradientTracker()
 
-    def forward(self, x, targets = None):
-        num_samples = x.shape[0]
-        feature_maps = [] # save feature maps for discriminator
-        img_size = x.size(2)
-        layer_outputs, yolo_outputs = [], []
-        # Use different feature map layers if yolov3 vs. yolov3-tiny
-        feature_map_layers = [8,22] if self.use_tiny else [36, 105]
-        for i, (module_def, module) in enumerate(zip(self.module_defs, self.module_list)):
-            if module_def["type"] in ["convolutional", "upsample", "maxpool"]:
-                x = module(x)
-            elif module_def["type"] == "route":
-                combined_outputs = torch.cat([layer_outputs[int(layer_i)] for layer_i in module_def["layers"].split(",")], 1)
-                group_size = combined_outputs.shape[1] // int(module_def.get("groups", 1))
-                group_id = int(module_def.get("group_id", 0))
-                x = combined_outputs[:, group_size * group_id : group_size * (group_id + 1)] # Slice groupings used by yolo v4
-            elif module_def["type"] == "shortcut":
-                layer_i = int(module_def["from"])
-                x = layer_outputs[-1] + layer_outputs[layer_i]
-            elif module_def["type"] == "yolo":
-                # x is now always the training yolo outputs, pred is the inference output
-                x, pred = module[0](x, img_size)
-                if self.training or targets is not None:
-                    yolo_outputs.append(x)
-                else:
-                    yolo_outputs.append(pred)
-            layer_outputs.append(x)
-            if i in feature_map_layers:
-                feature_maps.append(x)
-        if self.training:
-            # Training
-            return [yolo_outputs, feature_maps]
-        elif targets is not None:
-            # CropGAN, need to calculate the loss but not inference metrics
-            if len(targets) < 1:
-                loss = [0,0]
-            else:
-                loss, loss_components = compute_loss(yolo_outputs, targets,self)
-            # Reshape the yolo outputs, as done in CropGAN
-            yolo_outputs = torch.cat([yo.view(num_samples,-1,yo.shape[-1]) for yo in yolo_outputs],1)
-            return loss[0], yolo_outputs
-        else:
-            # Inference
-            return torch.cat(yolo_outputs, 1)
-
     def forward_features(self, x, targets=None, return_feature_maps=False):
         num_samples = x.shape[0]
         feature_maps = []  # save feature maps for discriminator
