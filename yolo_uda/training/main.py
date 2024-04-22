@@ -63,9 +63,9 @@ def main(args, hyperparams, run, **kwargs):
         if args.pretrained_weights.endswith(".pth"):
             # Load checkpoint weights
             model.load_state_dict(torch.load(args.pretrained_weights, map_location=device),strict=False)
-    else:
-        # Load darknet weights
-        model.yolo_model = load_yolo_weights(model.yolo_model, args.pretrained_weights)
+        else:
+            # Load darknet weights
+            model.yolo_model = load_yolo_weights(model.yolo_model, args.pretrained_weights)
     wandb.config.update(model.yolo_model.hyperparams)
 
     # create dataloaders

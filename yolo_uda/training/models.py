@@ -826,11 +826,6 @@ class YoloDA(torch.nn.Module):
         global_discriminator = GlobalDiscriminator(alpha=alpha, context=context, loss_func=global_disc_loss_func, use_tiny=use_tiny).to(device)
         local_discriminator = LocalDiscriminator(alpha=alpha, context=context).to(device)
 
-        # if pretrained_weights is not None:
-        #     yolo_model = load_yolo_weights(yolo_model, pretrained_weights[0])
-        #     global_discriminator.load_state_dict(torch.load(pretrained_weights[1]))
-        #     local_discriminator.load_state_dict(torch.load(pretrained_weights[2]))
-
         return YoloDA(
             yolo_model=yolo_model, 
             global_discriminator=global_discriminator, 
