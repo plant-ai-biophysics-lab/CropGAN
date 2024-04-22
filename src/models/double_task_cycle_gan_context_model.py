@@ -4,12 +4,9 @@ from util.image_pool import ImagePool
 from .base_model import BaseModel
 from . import networks
 
-from models.discriminator_utils import (
-    GlobalDiscriminator, LocalDiscriminator,
-    compose_discriminator_batch_evaluation, discriminator_step
-)
 from models.yolo_model import Darknet
-from yolo_uda.training.models import GRLDarknet
+from yolo_uda.training.models import GRLDarknet, GlobalDiscriminator, LocalDiscriminator
+from yolo_uda.training.evaluate import compose_discriminator_batch_evaluation, discriminator_step
 import os
 
 from torch.nn import Upsample
@@ -117,10 +114,10 @@ class DoubleTaskCycleGanContextModel(BaseModel):
         else:
             self.netYoloA = Darknet(opt.task_model_def, img_size=opt.yolo_img_size).to(device)
             self.netYoloB = Darknet(opt.task_model_def, img_size=opt.yolo_img_size).to(device)
-        self.netLocalDiscA = LocalDiscriminator(alpha=opt.lambda_yolo_a)
-        self.netLocalDiscB = LocalDiscriminator(alpha=opt.lambda_yolo_b)
-        self.netGlobalDiscA = GlobalDiscriminator(alpha=opt.lambda_yolo_a)
-        self.netGlobalDiscB = GlobalDiscriminator(alpha=opt.lambda_yolo_b)
+        self.netLocalDiscA = LocalDiscriminator(alpha=opt.lambda_yolo_a).to(device)
+        self.netLocalDiscB = LocalDiscriminator(alpha=opt.lambda_yolo_b).to(device)
+        self.netGlobalDiscA = GlobalDiscriminator(alpha=opt.lambda_yolo_a).to(device)
+        self.netGlobalDiscB = GlobalDiscriminator(alpha=opt.lambda_yolo_b).to(device)
 
         # load yolo weights
         if opt.yolo_a_weights != '':

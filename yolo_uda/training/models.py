@@ -1,27 +1,28 @@
 from __future__ import division
 
-import torch
-import os
-import numpy as np
-import torch.nn.functional as F
-
+import sys
 from itertools import chain
 from typing import List, Tuple
-from torch import nn
+import os
+
+import numpy as np
 from pytorch_metric_learning.utils import common_functions as pml_cf
 from pytorchyolo.utils.loss import compute_loss
 # from pytorchyolo.utils.parse_config import parse_model_config
-from pytorchyolo.utils.utils import weights_init_normal
-
+from pytorchyolo.utils.utils import weights_init_normal, non_max_suppression
+import torch
+from torch import nn
+import torch.nn.functional as F
+from torchmetrics.classification import BinaryAccuracy
 import wandb
 
-import sys
+from yolo_uda.training.metrics import FeatureMapCosineSimilarity, FeatureMapEuclideanDistance, MMDLoss
 
 sys.path.append(os.path.dirname(os.path.dirname(sys.path[0])))
 from src.models.yolo_model import Darknet
 
 
-def load_model(model_path, weights_path=None, context=False):
+def load_model(model_path, context=False):
     """Loads the yolo model from file.
 
     :param model_path: Path to model definition file (.cfg)
@@ -37,10 +38,24 @@ def load_model(model_path, weights_path=None, context=False):
 
     model.apply(weights_init_normal)
 
+    return model
+
+def load_yolo_weights(model, weights_path):
+    """Loads the yolo model from file.
+
+    :param model: Darknet model without weights loaded
+    :type model: GRLDarknet
+    :param weights_path: Path to weights or checkpoint file (.weights or .pth)
+    :type weights_path: str
+    :return: Returns model
+    :rtype: Darknet
+    """
+
     # If pretrained weights are specified, start from checkpoint or weight file
     if weights_path:
         if weights_path.endswith(".pth"):
             # Load checkpoint weights
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
             model.load_state_dict(torch.load(weights_path, map_location=device),strict=False)
         else:
             # Load darknet weights
@@ -140,7 +155,7 @@ class GlobalDiscriminator(nn.Module):
     A 3-layer MLP + Gradient Reversal Layer for domain classification.
     """
 
-    def __init__(self, in_size=255, out_size=1, alpha=1.0, context=False, use_tiny=True):
+    def __init__(self, loss_func, in_size=255, out_size=1, alpha=1.0, context=False, use_tiny=True):
         """
         Arguments:
             in_size: size of the input
@@ -162,9 +177,9 @@ class GlobalDiscriminator(nn.Module):
             nn.Dropout(p=0.5),
         )
         if use_tiny:
-            self.net.append(nn.AvgPool2d(18))
+            self.net.append(nn.AvgPool2d(12)) # TODO: make flexible for cropped and non-cropped
         else:
-            self.net.append(nn.AvgPool2d(36))
+            self.net.append(nn.AvgPool2d(36)) # TODO: Update this
         self.net.append(nn.Flatten())
 
         self.out = nn.Sequential(
@@ -172,6 +187,7 @@ class GlobalDiscriminator(nn.Module):
             nn.Sigmoid()
         )
 
+        self.loss_func = loss_func
         self.context = context
 
     def forward(self, x):
@@ -187,7 +203,7 @@ class LocalDiscriminator(nn.Module):
     A 3-layer MLP + Gradient Reversal Layer for domain classification.
     """
 
-    def __init__(self, in_size=256, alpha=1.0, context = False):
+    def __init__(self, in_size=256, alpha=1.0, loss_func=None, context=False):
         """
         Arguments:
             in_size: size of the input
@@ -211,7 +227,9 @@ class LocalDiscriminator(nn.Module):
             nn.Conv2d(in_channels=128, out_channels=1, kernel_size=1, stride=1, bias=False),
             nn.Sigmoid()
         )
-
+        if loss_func is None:
+            loss_func = nn.MSELoss()
+        self.loss_func = loss_func
         self.context = context
 
     def forward(self, x):
@@ -360,50 +378,6 @@ class GRLDarknet(Darknet):
 
         self.context_fusion = YOLOContextDownsample(use_context=context)
         self.gradient_tracker = GradientTracker()
-
-    def forward(self, x, targets = None):
-        num_samples = x.shape[0]
-        feature_maps = [] # save feature maps for discriminator
-        img_size = x.size(2)
-        layer_outputs, yolo_outputs = [], []
-        # Use different feature map layers if yolov3 vs. yolov3-tiny
-        feature_map_layers = [8,22] if self.use_tiny else [36, 105]
-        for i, (module_def, module) in enumerate(zip(self.module_defs, self.module_list)):
-            if module_def["type"] in ["convolutional", "upsample", "maxpool"]:
-                x = module(x)
-            elif module_def["type"] == "route":
-                combined_outputs = torch.cat([layer_outputs[int(layer_i)] for layer_i in module_def["layers"].split(",")], 1)
-                group_size = combined_outputs.shape[1] // int(module_def.get("groups", 1))
-                group_id = int(module_def.get("group_id", 0))
-                x = combined_outputs[:, group_size * group_id : group_size * (group_id + 1)] # Slice groupings used by yolo v4
-            elif module_def["type"] == "shortcut":
-                layer_i = int(module_def["from"])
-                x = layer_outputs[-1] + layer_outputs[layer_i]
-            elif module_def["type"] == "yolo":
-                # x is now always the training yolo outputs, pred is the inference output
-                x, pred = module[0](x, img_size)
-                if self.training or targets is not None:
-                    yolo_outputs.append(x)
-                else:
-                    yolo_outputs.append(pred)
-            layer_outputs.append(x)
-            if i in feature_map_layers:
-                feature_maps.append(x)
-        if self.training:
-            # Training
-            return [yolo_outputs, feature_maps]
-        elif targets is not None:
-            # CropGAN, need to calculate the loss but not inference metrics
-            if len(targets) < 1:
-                loss = [0,0]
-            else:
-                loss, loss_components = compute_loss(yolo_outputs, targets,self)
-            # Reshape the yolo outputs, as done in CropGAN
-            yolo_outputs = torch.cat([yo.view(num_samples,-1,yo.shape[-1]) for yo in yolo_outputs],1)
-            return loss[0], yolo_outputs
-        else:
-            # Inference
-            return torch.cat(yolo_outputs, 1)
 
     def forward_features(self, x, targets=None, return_feature_maps=False):
         num_samples = x.shape[0]
@@ -626,3 +600,241 @@ class GRLDarknet(Darknet):
             output_filters.append(filters)
 
         return hyperparams, module_list
+    
+
+
+#####################
+###   Full Model  ###
+#####################
+
+class YoloDA(torch.nn.Module):
+    def __init__(self, 
+                 yolo_model: GRLDarknet, 
+                 global_discriminator: GlobalDiscriminator, 
+                 local_discriminator: LocalDiscriminator,
+                 lambda_discriminator: float,
+                 device: str,
+                 iou_thresh: float = 0.5,
+                 conf_thresh: float = 0.5,
+                 nms_thresh: float = 0.5,
+                 lambda_mmd: float = 0,
+                 batch_size: int = 4,
+                ):
+        super().__init__()
+
+        self.yolo_model = yolo_model
+        self.global_discriminator = global_discriminator
+        self.local_discriminator = local_discriminator
+        
+        self.batch_size=batch_size
+        self.device=device
+        self.binary_accuracy = BinaryAccuracy(threshold=0.5).to('cuda')
+        self.mmd_metric = MMDLoss()
+        self.lambda_discriminator = lambda_discriminator
+        self.lambda_mmd = lambda_mmd
+        self.iou_thresh = iou_thresh
+        self.conf_thresh = conf_thresh
+        self.nms_thresh = nms_thresh
+
+    def forward(self, batch):
+        if self.training:
+            return self.forward_train(batch)
+        else:
+            return self.forward_eval(batch)
+
+    def forward_eval(self, batch):
+        # batch is a dict with keys: imgs and domain_labels
+        
+        source_features = self.yolo_model.forward_features(batch["imgs"], return_feature_maps=True)
+
+        features, disc_labels = self.compose_discriminator_batch(
+                source_features=source_features,
+                labels_source=batch["domain_labels"],
+                shuffle=True, #TODO: Should this be False?
+            )
+
+        # discriminator_step handles both global and local
+        (global_discriminator_loss, local_discriminator_loss, batch_discriminator_acc,
+            global_context, local_context) = self.discriminator_step(
+            map_features=features,
+            labels=disc_labels,
+        )
+
+        # duplicate along the first dimension for the global and local context
+        global_context = global_context.repeat(2, 1)
+        local_context = local_context.repeat(2, 1, 1, 1)
+
+        # get the source outputs with the context
+        outputs = self.yolo_model.forward_with_context(batch["imgs"], global_context, local_context)
+        outputs = non_max_suppression(outputs, conf_thres=self.conf_thresh, iou_thres=self.nms_thresh)
+
+        # # yolo loss if targets provided in batch (for CropGAN use)
+        if "targets" in batch:
+            yolo_loss, loss_components = compute_loss(outputs, batch["targets"], self.yolo_model)
+            return yolo_loss, outputs
+
+        return outputs
+
+    def forward_train(self, batch):
+        (data_source, data_target) = batch
+        # get imgs from data
+        _, imgs_s, targets, labels_source = data_source
+        _, imgs_t, _, labels_target = data_target
+        if len(imgs_s) < self.batch_size or len(imgs_t) < self.batch_size:
+            return None, None, None, None, None
+        
+        source_imgs = imgs_s.to(self.device)
+        target_imgs = imgs_t.to(self.device)
+        targets = targets.to(self.device)
+        
+        # with context, we need to get the global/local features from the yolo model,
+        # pass them through the discriminator to get the discriminator outputs and context
+        # vectors, and then pass the context vectors back into the yolo model to get the
+        # final yolo output -> this requires multiple steps
+
+        # run source pass
+        source_features = self.yolo_model.forward_features(source_imgs)
+        # Run target pass to encode features for classifier
+        target_features = self.yolo_model.forward_features(target_imgs)
+
+        features, labels = self.compose_discriminator_batch(
+            source_features=source_features,
+            target_features=target_features,
+            labels_source=labels_source,
+            labels_target=labels_target,
+        )
+
+        # discriminator_step handles both global and local
+        (global_discriminator_loss, local_discriminator_loss, batch_discriminator_acc,
+            global_context, local_context) = self.discriminator_step(
+            map_features=features,
+            labels=labels,
+        )
+
+        # get the source outputs with the context
+        source_outputs = self.yolo_model.forward_with_context(source_imgs, global_context, local_context)
+
+        # yolo loss
+        yolo_loss, loss_components = compute_loss(source_outputs, targets, self.yolo_model)
+
+        # Calculate average MMD loss per batch
+        mmd_loss = self.mmd_metric(source_features[1], target_features[1])
+
+        # run backward propagation
+        discriminator_loss = 0.05 * global_discriminator_loss + 0.95 * local_discriminator_loss
+        loss = yolo_loss + self.lambda_discriminator * discriminator_loss + self.lambda_mmd * mmd_loss
+        
+        # Collect loss_components
+        loss_dict = {k:float(v) for k,v in zip(["iou_loss","obj_loss","cls_loss","yolo_loss"],loss_components)}
+        loss_dict["discriminator_loss"] = float(discriminator_loss)
+        loss_dict["global_discriminator_loss"] = float(global_discriminator_loss)
+        loss_dict["local_discriminator_loss"] = float(local_discriminator_loss)
+        
+        self.yolo_model.seen += imgs_s.size(0)
+
+        return loss, loss_dict, batch_discriminator_acc, source_features, target_features
+
+    def discriminator_step(
+            self,
+            map_features,
+            labels,
+        ):
+
+        """
+        Discriminator step performed between the source and targer domain.
+        Input arguments:
+        map_features: Tensor = feature map obtained from the feature extractor
+        labels: Tensor = ground truth
+        Return:
+        Tensor = cross entropy loss between the prediction and the ground truth.
+        """
+        global_outputs, global_context = self.global_discriminator(map_features['global_features'])
+        local_outputs, local_context = self.local_discriminator(map_features['local_features'])
+
+        # calculate accuracy
+        global_discriminator_acc = self.binary_accuracy(global_outputs, labels['global_labels'])
+        local_discriminator_acc = self.binary_accuracy(local_outputs, labels['local_labels'])
+        discriminator_acc = {"global_discriminator_acc": global_discriminator_acc, "local_discriminator_acc":local_discriminator_acc}
+
+        # calculate loss
+        global_discriminator_loss = self.global_discriminator.loss_func(global_outputs, labels['global_labels'].float())
+        local_discriminator_loss = self.local_discriminator.loss_func(local_outputs, labels['local_labels'].float())
+
+        return global_discriminator_loss, local_discriminator_loss, discriminator_acc, global_context, local_context
+
+    def compose_discriminator_batch(
+            self, 
+            source_features: torch.Tensor, 
+            labels_source: torch.Tensor, 
+            target_features: torch.Tensor = None,
+            labels_target: torch.Tensor = None,
+            shuffle: bool = True
+        ):
+        
+        # Create pixel-wise labels
+        activation_dims = (source_features[0].shape[2], source_features[0].shape[3], 1)
+        labels_source_pixelwise = labels_source.repeat(activation_dims).permute(2,0,1)
+        
+        if self.training:
+            labels_target_pixelwise = labels_target.repeat(activation_dims).permute(2,0,1)
+
+            # Combine source and target batches for discriminator
+            features = {
+                "global_features":torch.cat([source_features[1], target_features[1]],axis=0).to(self.device),
+                "local_features":torch.cat([source_features[0], target_features[0]],axis=0).to(self.device)
+                }
+            labels = {
+                "global_labels": torch.cat([labels_source, labels_target],axis=0).to(self.device),
+                "local_labels": torch.cat([labels_source_pixelwise, labels_target_pixelwise],axis=0).to(self.device)
+                }
+        else:
+            features = {
+                "global_features": source_features[1].to(self.device),
+                "local_features": source_features[0].to(self.device)
+                }
+            labels = {
+                "global_labels": labels_source.to(self.device),
+                "local_labels": labels_source_pixelwise.to(self.device)
+                }
+
+        if shuffle:
+            # Shuffle batch
+            idx = torch.randperm(features['global_features'].shape[0])
+            features_shuffled = {key:value[idx] for key,value in features.items()}
+            labels_shuffled = {key:value[idx] for key,value in labels.items()}
+            return features_shuffled, labels_shuffled
+        return features, labels
+
+    @classmethod
+    def create_from_config(
+        cls, 
+        config, 
+        context: bool, 
+        alpha: float, 
+        use_tiny: bool, 
+        device: str, 
+        global_disc_loss_func, 
+        lambda_discriminator: float,
+        iou_thresh: float = 0.5,
+        conf_thresh: float = 0.3,
+        nms_thresh: float = 0.5,
+        lambda_mmd: float = 0,         
+        batch_size = 4, 
+    ):
+        
+        yolo_model = load_model(config, context=context).to(device)
+        global_discriminator = GlobalDiscriminator(alpha=alpha, context=context, loss_func=global_disc_loss_func, use_tiny=use_tiny).to(device)
+        local_discriminator = LocalDiscriminator(alpha=alpha, context=context).to(device)
+
+        return YoloDA(
+            yolo_model=yolo_model, 
+            global_discriminator=global_discriminator, 
+            local_discriminator=local_discriminator,
+            lambda_discriminator=lambda_discriminator,
+            lambda_mmd=lambda_mmd,
+            iou_thresh = iou_thresh,
+            conf_thresh = conf_thresh,
+            nms_thresh = nms_thresh,
+            batch_size=batch_size,
+            device=device,
+        )
