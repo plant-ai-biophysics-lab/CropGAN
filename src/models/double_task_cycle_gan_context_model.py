@@ -1,16 +1,17 @@
-import torch
+import os
 import itertools
-from util.image_pool import ImagePool
-from .base_model import BaseModel
-from . import networks
+
+import torch
+from torch.nn import Upsample
+import torch.nn as nn
+from pytorchyolo.utils.loss import compute_loss
 
 from models.yolo_model import Darknet
 from yolo_uda.training.models import GRLDarknet, GlobalDiscriminator, LocalDiscriminator
 from yolo_uda.training.evaluate import compose_discriminator_batch_evaluation, discriminator_step
-import os
-
-from torch.nn import Upsample
-import torch.nn as nn
+from util.image_pool import ImagePool
+from .base_model import BaseModel
+from . import networks
 
 
 class DoubleTaskCycleGanContextModel(BaseModel):
@@ -357,8 +358,9 @@ class DoubleTaskCycleGanContextModel(BaseModel):
         if lambda_yolo_b > 0:
             # loss_yolo_b, self.bbox_outputs = self.netYoloB(self.fake_B * 0.5 + 0.5,
             #                                                self.A_label)  # de-normalize the image before feed into the yolo net
+            imgs = self.fake_B * 0.5 + 0.5
 
-            yolo_b_source_features = self.netYoloB.forward_features(self.fake_B * 0.5 + 0.5,
+            yolo_b_source_features = self.netYoloB.forward_features(imgs,
                                                                     return_feature_maps=True)
             print([f.shape for f in yolo_b_source_features], 'feature shapes')
 
@@ -388,7 +390,12 @@ class DoubleTaskCycleGanContextModel(BaseModel):
             # print('evaluate shape', imgs.shape, global_context.shape, local_context.shape)
 
             # get the source outputs with the context
-            loss_yolo_b, outputs = self.netYoloB.forward_with_context(imgs, global_context, local_context)
+            source_outputs = self.netYoloB.forward_with_context(imgs, global_context, local_context)
+
+            # yolo loss
+            loss_yolo_b, loss_components = compute_loss(source_outputs, self.A_label.unsqueeze(0), self.netYoloB)
+
+
             self.loss_yolo_b = lambda_yolo_b * loss_yolo_b
         else:
             self.loss_yolo_b = 0
@@ -397,8 +404,9 @@ class DoubleTaskCycleGanContextModel(BaseModel):
         if lambda_yolo_a > 0:
             # loss_yolo_a, self.bbox_outputs_a = self.netYoloA(self.fake_labeled_A * 0.5 + 0.5,
             #                                                  self.labeled_B_label)  # de-normalize the image before feed into the yolo net
+            imgs = self.fake_labeled_A * 0.5 + 0.5
 
-            yolo_a_source_features = self.netYoloA.forward_features(self.fake_labeled_A * 0.5 + 0.5,
+            yolo_a_source_features = self.netYoloA.forward_features(imgs,
                                                                     return_feature_maps=True)
 
             features, disc_labels = compose_discriminator_batch_evaluation(
@@ -406,7 +414,7 @@ class DoubleTaskCycleGanContextModel(BaseModel):
                 downsample_2=downsample_2,
                 downsample_4=downsample_4,
                 labels_source=torch.ones((self.fake_labeled_A.shape[0],), dtype=torch.float32, device=self.device),
-                device=device
+                device=self.device
             )
 
             # discriminator_step handles both global and local
@@ -427,8 +435,11 @@ class DoubleTaskCycleGanContextModel(BaseModel):
             # print('evaluate shape', imgs.shape, global_context.shape, local_context.shape)
 
             # get the source outputs with the context
-            loss_yolo_a, outputs = self.netYoloA.forward_with_context(imgs, global_context, local_context)
+            source_outputs = self.netYoloA.forward_with_context(imgs, global_context, local_context)
 
+            # yolo loss
+            loss_yolo_a, loss_components = compute_loss(source_outputs, self.labeled_B_label.unsqueeze(0), self.netYoloA)
+            
             self.loss_G_B2 = self.criterionGAN(self.netD_B(self.fake_labeled_A), True)
             self.loss_yolo_a = lambda_yolo_a * loss_yolo_a
         else:
