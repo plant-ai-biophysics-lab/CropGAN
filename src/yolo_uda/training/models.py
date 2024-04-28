@@ -664,16 +664,16 @@ class YoloDA(torch.nn.Module):
         global_context = global_context.repeat(2, 1)
         local_context = local_context.repeat(2, 1, 1, 1)
 
-        # get the source outputs with the context
-        outputs = self.yolo_model.forward_with_context(batch["imgs"], global_context, local_context)
-        outputs = non_max_suppression(outputs, conf_thres=self.conf_thresh, iou_thres=self.nms_thresh)
-
-        # # yolo loss if targets provided in batch (for CropGAN use)
         if "targets" in batch:
-            yolo_loss, loss_components = compute_loss(outputs, batch["targets"], self.yolo_model)
+            # yolo_model.forward_with_context() handles compute_loss
+            yolo_loss, outputs = self.yolo_model.forward_with_context(batch["imgs"], global_context, local_context, targets=batch["targets"])
             return yolo_loss, outputs
+        else:
+            # get the source outputs with the context
+            outputs = self.yolo_model.forward_with_context(batch["imgs"], global_context, local_context)
+            outputs = non_max_suppression(outputs, conf_thres=self.conf_thresh, iou_thres=self.nms_thresh)
+            return outputs
 
-        return outputs
 
     def forward_train(self, batch):
         (data_source, data_target) = batch
