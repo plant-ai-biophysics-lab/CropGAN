@@ -3,17 +3,20 @@ import glob
 import os
 import pathlib
 from functools import partial
+import sys
+from datetime import datetime
 
 import wandb
 import torch
 import torch.optim as optim
 from torchvision.ops import sigmoid_focal_loss
 
-from loader import prepare_data, _create_data_loader, _create_validation_data_loader
-from models import load_model, load_yolo_weights, YoloDA
-from trainer import train
-from validate import validate
-from datetime import datetime
+# Add root CropGAN directory to path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(sys.path[0]))))
+from src.yolo_uda.training.loader import prepare_data, _create_data_loader, _create_validation_data_loader
+from src.yolo_uda.training.models import load_model, load_yolo_weights, YoloDA
+from src.yolo_uda.training.trainer import train
+from src.yolo_uda.training.validate import validate
 
 
 def create_save_dir(args):

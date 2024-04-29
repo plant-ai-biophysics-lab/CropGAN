@@ -7,17 +7,11 @@ from multiprocessing import Pool
 from PIL import Image
 import numpy as np
 import torch
+import wandb
 
-# Import Crop GAN related libs
-gan_dir = os.path.abspath("../src/")
-sys.path.append(gan_dir)
-
-from models import create_model
 from models.double_task_cycle_gan_model import DoubleTaskCycleGanModel
-from options.image_gen_options import ImageGenOptions
 import util.util as utils
 
-import wandb
 
 # Load a synthetic (Domain A) image you want to transfer
 # Loop through all the synthetic images, generate realistic ones.

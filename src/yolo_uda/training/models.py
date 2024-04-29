@@ -16,10 +16,9 @@ import torch.nn.functional as F
 from torchmetrics.classification import BinaryAccuracy
 import wandb
 
-from yolo_uda.training.metrics import FeatureMapCosineSimilarity, FeatureMapEuclideanDistance, MMDLoss
 
-sys.path.append(os.path.dirname(os.path.dirname(sys.path[0])))
 from src.models.yolo_model import Darknet
+from src.yolo_uda.training.metrics import FeatureMapCosineSimilarity, FeatureMapEuclideanDistance, MMDLoss
 
 
 def load_model(model_path, context=False):
