@@ -5,6 +5,7 @@ from typing import Callable, Union, Dict, List, Any
 import torch
 import tqdm
 import wandb
+import numpy as np
 from torch import nn
 from terminaltables import AsciiTable
 from torch.utils.data import DataLoader
@@ -14,9 +15,32 @@ from pytorchyolo.utils.utils import to_cpu
 from models import Upsample
 from metrics import FeatureMapCosineSimilarity, FeatureMapEuclideanDistance, MMDLoss
 from evaluate import discriminator_step, _evaluate
+from metrics import TSNEVisualizer
 
 binary_accuracy = BinaryAccuracy(threshold=0.5).to('cuda')
+tsne = TSNEVisualizer(
+    n_components=2,
+    perplexity=30.0,
+    init='pca'
+)
 
+def tsne_visualization(source_features: torch.Tensor, target_features: torch.Tensor, step: int):
+
+    # preprocess source and target features
+    source_global = tsne.preprocess(x = source_features)
+    target_global = tsne.preprocess(x = target_features)
+
+    # concatenate and create labels
+    features = np.vstack([source_global, target_global])
+    labels = np.array([0]*len(source_global) + [1]*len(target_global))
+
+    # run tsne and plot
+    features_reduced = tsne.run_tsne(x = features)
+    tsne.plot_tsne(
+        features = features_reduced, 
+        labels = labels, 
+        step = step
+    )
 
 def compose_discriminator_batch(source_features: torch.Tensor, target_features: torch.Tensor,
                                 mini_batch_size: int, downsample_2: nn.Module, downsample_4: nn.Module,
@@ -64,6 +88,8 @@ def train(
     discriminator_loss_function: Union[Callable, nn.Module],
     save_dir: str,
     run: wandb.run,
+    visualize_tsne: bool,
+    n_tsne: int,
     lambda_discriminator: float = 0.5,
     lambda_mmd: float = 0.001,
     verbose: bool = False,
@@ -74,7 +100,7 @@ def train(
     nms_thresh: float = 0.5,
     log_img_every_n_epochs: int = 50,
     log_img_count: int = 10,
-    metrics_suffix: str = "", # Not used, just mirrors validate interface
+    metrics_suffix: str = "", # Not used, just mirrors validate interface,
 ):
     # upsample_4 = Upsample(scale_factor=4, mode="nearest")
     # upsample_2 = Upsample(scale_factor=2, mode="nearest")
@@ -115,6 +141,12 @@ def train(
         # tracker
         updated_lr_this_epoch = False
 
+        # for tsne visual
+        if visualize_tsne:
+                if epoch == 1 or epoch == epochs:
+                    all_source_features = []
+                    all_target_features = []
+
         for batch_i, contents in enumerate(
             tqdm.tqdm(zip(source_dataloader, target_dataloader), desc=f"Training Epoch {epoch}")
         ):
@@ -145,6 +177,10 @@ def train(
             source_features = model.forward_features(source_imgs)
             # Run target pass to encode features for classifier
             target_features = model.forward_features(target_imgs)
+            if visualize_tsne:
+                if epoch == 1 or epoch == epochs:
+                    all_source_features.append(source_features[1])
+                    all_target_features.append(target_features[1])
 
             features, labels = compose_discriminator_batch(
                 source_features=source_features,
@@ -264,6 +300,18 @@ def train(
             }, step=batches_done)
             model.seen += imgs_s.size(0)
 
+        # perform tsne visualization
+        if visualize_tsne:
+            if epoch == 1 or epoch == epochs:
+                try:
+                    tsne_visualization(
+                        source_features = all_source_features, 
+                        target_features = all_target_features,
+                        step = batches_done
+                    )
+                except Exception as e:
+                    print(e)
+
         # Training epoch metrics
         # Discriminator accuracy
         wandb.log({"glob_dscm_acc": global_discriminator_acc["total"] / global_discriminator_acc["batch_count"]}, step=batches_done)
@@ -347,7 +395,6 @@ def train(
                     mt="f1", value=best_f1, date=save_date, epoch=epoch)
                 torch.save(model.state_dict(),
                            os.path.join(save_dir, f1_ckpt_name))
-
 
     return model
 

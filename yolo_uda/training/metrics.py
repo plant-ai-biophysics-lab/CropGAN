@@ -2,8 +2,10 @@ from abc import abstractmethod
 import math
 
 import torch
+import wandb
 import torch.nn.functional as F
 import numpy as np
+import matplotlib.pyplot as plt
 
 from torch import nn
 from sklearn.manifold import TSNE
@@ -153,17 +155,85 @@ class TSNEVisualizer:
         self.init = init
         self.divergence = []
 
+        # initialize model
+        self.model = TSNE(
+            n_components=self.n_components,
+            perplexity=self.perplexity,
+            init=self.init
+        )
+
+    def preprocess(self, x: list):
+        """
+        Flattens the features and normalizes them using a standard scaler.
+        For normalization, standard scaler is used which standardizes the features to a mean
+        of zero and standard deviation of 1.
+
+        Parameters:
+        - x (np.ndarray): feature dataset of shape (n_samples, width, height, n_features)
+        """
+        # concatenate list of tensors
+        x = torch.cat(x, dim=0)
+
+        # convert torch to numpy
+        if isinstance(x, torch.Tensor):
+            x = x.detach().cpu().numpy()
+
+        # flatten the data
+        batch_size = x.shape[0]
+        w, h = x.shape[2], x.shape[3]
+        num_features = x.shape[1]
+        flattened_x = x.reshape(batch_size, w*h*num_features)
+
+        # normalize the data
+        scaler = StandardScaler()
+        x_norm = scaler.fit_transform(flattened_x)
+
+        return x_norm
+
     def run_tsne(self, x: np.ndarray):
         """
-        Normalizes the features using a standard scaler and then runs the t-SNE algorithm.
+        Runs the t-SNE algorithm.
 
         Parameters:
         - x (np.ndarray): feature dataset of shape (n_samples, n_features)
         """
-        # flatten the data
-
-        # normalize the data
 
         # fit the transform
-        
-        pass
+        x_tsne = self.model.fit_transform(x)
+
+        # calcualate divergence
+        self.divergence.append(self.model.kl_divergence_)
+
+        return x_tsne
+
+    @staticmethod
+    def plot_tsne(features, labels, step):
+        """
+        Plots the results from the tSNE algorithm.
+        """
+
+        # define colors and markers for each domain and plot
+        plt.figure(figsize=(8, 6))
+        domain_colors = {0: 'blue', 1: 'red'}
+        markers = {0: 'o', 1: '^'}
+        domain_labels = {0: 'Source', 1: 'Target'}
+        for domain in np.unique(labels):
+            idx = np.where(labels == domain)
+            plt.scatter(features[idx, 0], features[idx, 1], c=domain_colors[domain],
+                        label=f'{domain_labels[domain]} Domain', alpha=0.6, marker=markers[domain])
+
+        plt.legend(title='Domain', loc='best', frameon=False)
+        plt.title(f't-SNE Visualization at Step {step}')
+        plt.xlabel('t-SNE Component 1')
+        plt.ylabel('t-SNE Component 2')
+
+        # save the plot to a buffer using the canvas directly
+        fig = plt.gcf()
+        plt.draw()
+        image_buf = fig.canvas.tostring_rgb()
+        image = np.frombuffer(image_buf, dtype=np.uint8)
+        image = image.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+
+        # log the image to W&B
+        wandb.log({"t-SNE Plot": wandb.Image(image, caption=f"t-SNE at Epoch {step}")}, step=step)
+        plt.close(fig)
