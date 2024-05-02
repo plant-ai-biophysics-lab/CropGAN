@@ -72,6 +72,8 @@ class BaseOptions():
         parser.add_argument("--grl_alpha", type=float, default=0.1, help="grl alpha and lambda")
         parser.add_argument("--grl_lambda", type=float, default=0.1, help="grl alpha and lambda")
         parser.add_argument("--grl_lmmd", type=float, default=0.0, help="grl lambda mmd")
+        parser.add_argument("--context-vector", action="store_true", default=False,
+                    help="If flag is passed, context vector will be used in discriminator.")
         # Logging parameters
         parser.add_argument("--wandb_name", type=str, default="default-cropgan-run", help="Name of the wandb run")
 
