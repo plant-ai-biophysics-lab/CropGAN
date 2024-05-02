@@ -10,6 +10,7 @@ Step 1: Initialize a YOLO model from real A.
 import os
 import glob
 import time
+import datetime
 import wandb
 
 from options.image_gen_options import ImageGenOptions
@@ -44,24 +45,29 @@ if __name__ == '__main__':
     if opt.yolo_b_weights == '':
         opt.yolo_b_weights = opt.yolo_a_weights
     if os.path.isdir(opt.yolo_a_weights):
-        possible_weight_path = os.path.join(
-            opt.yolo_a_weights, f"k-{opt.reverse_task_k}_alpha-{opt.grl_alpha}_lambda-{opt.grl_lambda}_lmmd-{opt.grl_lmmd}", "ckpt_best_map.pth")
-        print(f"Loading ckpt_best_map.pth from {possible_weight_path}")
-        weight_file = glob.glob(possible_weight_path)[0]
+        # loads the best map (but this is unused for now since we're looking for the last checkpoint)
+        # possible_weight_path = os.path.join(
+        #     opt.yolo_a_weights, f"k-{opt.reverse_task_k}_alpha-{opt.grl_alpha}_lambda-{opt.grl_lambda}_lmmd-{opt.grl_lmmd}", "ckpt_best_map.pth")
+        # print(f"Loading ckpt_best_map.pth from {possible_weight_path}")
+        # weight_file = glob.glob(possible_weight_path)[0]
+        weight_files = glob.glob(os.path.join(opt.yolo_a_weights,
+                                              f"k-{opt.reverse_task_k}_alpha-{opt.grl_alpha}_lambda-{opt.grl_lambda}_lmmd-{opt.grl_lmmd}", "ckpt_last_*.pth"))
 
-        # latest_weight, latest_time = "", datetime.datetime(2024, 1, 1)
-        # for weight_file in weight_files:
-        #     print(weight_file)
-        #     weight_time = "_".join(os.path.splitext(os.path.basename(weight_file))[0].split("_")[-2:])
-        #     weight_time = datetime.datetime.strptime(weight_time, '%Y-%m-%d_%H-%M-%S')
-        #     if weight_time > latest_time:
-        #         latest_weight, latest_time = weight_file, weight_time
+        # load the latest checkpoint
+        latest_weight, latest_time = "", datetime.datetime(2024, 1, 1)
+        for weight_file in weight_files:
+            weight_time = "_".join(os.path.splitext(os.path.basename(weight_file))[0].split("_")[-2:])
+            weight_time = datetime.datetime.strptime(weight_time, '%Y-%m-%d_%H-%M-%S')
+            if weight_time > latest_time:
+                latest_weight, latest_time = weight_file, weight_time
 
-        # if latest_weight == "":
-        #     raise FileNotFoundError(f"No weights found at {possible_weight_path}")
+        if latest_weight == "":
+            raise FileNotFoundError(f"No weights found at {possible_weight_path}")
 
-        opt.yolo_a_weights = weight_file
-        opt.yolo_b_weights = weight_file
+        opt.yolo_a_weights = latest_weight
+        opt.yolo_b_weights = latest_weight
+        opt.global_discriminator_weight = latest_weight.replace('ckpt_last_', 'global_discriminator_last_')
+        opt.local_discriminator_weight = latest_weight.replace('ckpt_last_', 'local_discriminator_last_')
 
     model = create_model(opt)      # create a model given opt.model and other options
     model.setup(opt)               # regular setup: load and print networks; create schedulers

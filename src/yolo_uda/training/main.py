@@ -3,20 +3,20 @@ import glob
 import os
 import pathlib
 from functools import partial
+import sys
+from datetime import datetime
 
 import wandb
 import torch
 import torch.optim as optim
 from torchvision.ops import sigmoid_focal_loss
-from PIL import Image
-from torchvision import transforms
-# from pytorchyolo.test import _create_validation_data_loader
 
-from loader import prepare_data, _create_data_loader, _create_validation_data_loader
-from models import load_model, GlobalDiscriminator, LocalDiscriminator, Upsample
-from trainer import train
-from validate import validate
-from datetime import datetime
+# Add root CropGAN directory to path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(sys.path[0]))))
+from src.yolo_uda.training.loader import prepare_data, _create_data_loader, _create_validation_data_loader
+from src.yolo_uda.training.models import load_model, load_yolo_weights, YoloDA
+from src.yolo_uda.training.trainer import train
+from src.yolo_uda.training.validate import validate
 
 
 def create_save_dir(args):
@@ -36,33 +36,42 @@ def main(args, hyperparams, run, **kwargs):
     prepare_data(args.train_path, args.target_train_path, args.target_val_path, args.k, args.skip_preparation,
                  args.limit_val_size)
 
+    # Loss functions
+    # for loss calculations
+    if args.disc_loss_func == "focal":
+        disc_loss_func = partial(sigmoid_focal_loss, alpha=-1, gamma=3, reduction='mean')
+    elif args.disc_loss_func == "bce":
+        disc_loss_func = torch.nn.BCELoss()
+    else:
+        raise ValueError(f"disc loss func can only be bce or focal, received {args.disc_loss_func}.")
+
     # load models
     use_tiny = 'tiny' in args.config
 
-    if args.context_vector:
-        if 'pretrained_weights' in kwargs:
-            pretrained_weights = kwargs['pretrained_weights']
-            model = load_model(args.config, pretrained_weights[0], context=args.context_vector).to(device)
-            wandb.config.update(model.hyperparams)
-            global_discriminator = GlobalDiscriminator(alpha=args.alpha, context=args.context_vector, use_tiny=use_tiny).to(device)
-            global_discriminator.load_state_dict(torch.load(pretrained_weights[1]))
-            local_discriminator = LocalDiscriminator(alpha=args.alpha, context=args.context_vector).to(device)
-            local_discriminator.load_state_dict(torch.load(pretrained_weights[2]))
+    model = YoloDA.create_from_config(
+        config=args.config,
+        context=args.context_vector,
+        alpha=args.alpha,
+        use_tiny=use_tiny,
+        batch_size=args.batch_size,
+        global_disc_loss_func=disc_loss_func,
+        iou_thresh=hyperparams["iou_thresh"],
+        conf_thresh=hyperparams["conf_thresh"],
+        nms_thresh=hyperparams["nms_thresh"],
+        lambda_mmd= args.lambda_mmd,
+        lambda_discriminator= args.lambda_disc,
+        device=device
+        )
+    if args.pretrained_weights is not None:
+        if args.pretrained_weights.endswith(".pth"):
+            # Load checkpoint weights
+            model.load_state_dict(torch.load(args.pretrained_weights, map_location=device),strict=False)
         else:
-            model = load_model(args.config, args.pretrained_weights, context=args.context_vector).to(device)
-            wandb.config.update(model.hyperparams)
-            global_discriminator = GlobalDiscriminator(alpha=args.alpha, context=args.context_vector, use_tiny=use_tiny).to(device)
-            local_discriminator = LocalDiscriminator(alpha=args.alpha, context=args.context_vector).to(device)
-    else:
-        model = load_model(args.config, args.pretrained_weights, context=args.context_vector).to(device)
-        wandb.config.update(model.hyperparams)
-        global_discriminator = GlobalDiscriminator(alpha=args.alpha, context=args.context_vector, use_tiny=use_tiny).to(device)
-        local_discriminator = LocalDiscriminator(alpha=args.alpha, context=args.context_vector).to(device)
+            # Load darknet weights
+            model.yolo_model = load_yolo_weights(model.yolo_model, args.pretrained_weights)
+    wandb.config.update(model.yolo_model.hyperparams)
 
     # create dataloaders
-    # mini_batch_size = model.hyperparams['batch'] // model.hyperparams['subdivisions']
-    mini_batch_size = hyperparams['batch_size']
-
     source_dataloader = _create_data_loader(
         os.path.dirname(args.train_path) + f"/train_k_{args.k}.txt",
         label_path=args.train_label_path,
@@ -93,13 +102,13 @@ def main(args, hyperparams, run, **kwargs):
     )
 
     # create optimizer
-    params = [p for p in model.parameters() if p.requires_grad]
-    params_global_classifier = [p for p in global_discriminator.parameters() if p.requires_grad]
-    params_local_classifier = [p for p in local_discriminator.parameters() if p.requires_grad]
+    params = [p for p in model.yolo_model.parameters() if p.requires_grad]
+    params_global_classifier = [p for p in model.global_discriminator.parameters() if p.requires_grad]
+    params_local_classifier = [p for p in model.local_discriminator.parameters() if p.requires_grad]
     optimizer = optim.Adam(
         params,
-        lr=float(model.hyperparams['learning_rate']),
-        weight_decay=float(model.hyperparams['decay'])
+        lr=float(model.yolo_model.hyperparams['learning_rate']),
+        weight_decay=float(model.yolo_model.hyperparams['decay'])
     )
     optimizer_global_classifier = optim.Adam(
         params_global_classifier,
@@ -112,15 +121,7 @@ def main(args, hyperparams, run, **kwargs):
         weight_decay=float(hyperparams["decay_disc"])
     )
 
-    # Loss functions
-    # for loss calculations
-    # cross_entropy = nn.CrossEntropyLoss()
-    if args.disc_loss_func == "focal":
-        disc_loss_func = partial(sigmoid_focal_loss, alpha=-1, gamma=3, reduction='mean')
-    elif args.disc_loss_func == "bce":
-        disc_loss_func = torch.nn.BCELoss()
-    else:
-        raise ValueError(f"disc loss func can only be bce or focal, received {args.disc_loss_func}.")
+
 
     if args.eval_only:
         # Pull out metrics suffix
@@ -134,16 +135,8 @@ def main(args, hyperparams, run, **kwargs):
         # validate
         model = validate(
             model=model,
-            global_discriminator=global_discriminator,
-            local_discriminator=local_discriminator,
-            discriminator_loss_function=disc_loss_func,
             validation_dataloader=validation_dataloader,
-            device=device,
-            mini_batch_size=mini_batch_size,
             class_names=class_names,
-            iou_thresh=hyperparams["iou_thresh"],
-            conf_thresh=hyperparams["conf_thresh"],
-            nms_thresh=hyperparams["nms_thresh"],
             run=run,
             metrics_suffix=metrics_suffix
         )
@@ -156,24 +149,14 @@ def main(args, hyperparams, run, **kwargs):
 
         model = train(
             model=model,
-            global_discriminator=global_discriminator,
-            local_discriminator=local_discriminator,
-            discriminator_loss_function=disc_loss_func,
             source_dataloader=source_dataloader,
             validation_dataloader=validation_dataloader,
             target_dataloader=target_dataloader,
-            device=device,
-            mini_batch_size=mini_batch_size,
             class_names=class_names,
-            iou_thresh=hyperparams["iou_thresh"],
-            conf_thresh=hyperparams["conf_thresh"],
-            nms_thresh=hyperparams["nms_thresh"],
             run=run,
             optimizer=optimizer,
             optimizer_global_classifier=optimizer_global_classifier,
             optimizer_local_classifier=optimizer_local_classifier,
-            lambda_discriminator=args.lambda_disc,
-            lambda_mmd=args.lambda_mmd,
             verbose=args.verbose,
             epochs=args.epochs,
             save_dir=save_dir,
@@ -181,21 +164,13 @@ def main(args, hyperparams, run, **kwargs):
             log_img_count = args.log_img_count,
         )
         
-        def save_weights(model, prefix, type):
-            save_name = f"{prefix}_last_{datetime.today().strftime('%Y-%m-%d_%H-%M-%S')}.pth"
-            save_filepath = os.path.join(save_dir, save_name)
-            torch.save(model.state_dict(), save_filepath)
-            
-            if type == "model":
-                best_model = wandb.Artifact(args.name, type="model")
-                best_model.add_file(save_filepath)
+        save_name = f"ckpt_last_{datetime.today().strftime('%Y-%m-%d_%H-%M-%S')}.pth"
+        save_filepath = os.path.join(save_dir, save_name)
+        torch.save(model.state_dict(), save_filepath)
         
-        # save model weights
-        save_weights(model, "ckpt", "model")
-        # log the discriminator weights
-        save_weights(global_discriminator, "global_discriminator", "global_discriminator")
-        save_weights(local_discriminator, "local_discriminator", "local_discriminator")
-        
+        best_model = wandb.Artifact(args.name, type="model")
+        best_model.add_file(save_filepath)
+    
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser()
@@ -325,13 +300,6 @@ if __name__ == '__main__':
             raise FileNotFoundError(f"No weights found at {save_dir}")
 
         args.pretrained_weights = latest_weight
-
-        # add the discriminator weights if context vector is used
-        if args.context_vector:
-            global_discriminator = os.path.join(save_dir, latest_weight.replace("ckpt_last", "global_discriminator_last"))
-            local_discriminator = os.path.join(save_dir, latest_weight.replace("ckpt_last", "local_discriminator_last"))
-            pretrained_weights = [args.pretrained_weights, global_discriminator, local_discriminator]
-
-            main(args, hyperparams, run, pretrained_weights=pretrained_weights)
-        else:
-            main(args, hyperparams, run)
+        
+        main(args, hyperparams, run)
+        
