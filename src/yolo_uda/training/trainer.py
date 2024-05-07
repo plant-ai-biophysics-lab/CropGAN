@@ -92,9 +92,9 @@ def train(
 
         # for tsne visual
         if visualize_tsne:
-                if epoch == 1 or epoch == epochs:
-                    all_source_features = []
-                    all_target_features = []
+            if epoch == 1 or epoch == epochs:
+                all_source_features = []
+                all_target_features = []
 
         for batch_i, contents in enumerate(
             tqdm.tqdm(zip(source_dataloader, target_dataloader), desc=f"Training Epoch {epoch}")
@@ -107,6 +107,10 @@ def train(
             batches_done = len(target_dataloader) * (epoch-1) + batch_i
   
             loss, loss_components, batch_discriminator_acc, source_features, target_features = model(batch=contents)
+            if visualize_tsne and source_features is not None and target_features is not None:
+                if epoch == 1 or epoch == epochs:
+                    all_source_features.append(source_features[1])
+                    all_target_features.append(target_features[1])
             if loss is None:
                 # catches incomplete training batches
                 continue
