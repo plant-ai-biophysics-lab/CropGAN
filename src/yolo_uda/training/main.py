@@ -238,8 +238,6 @@ if __name__ == '__main__':
                     help="If True, use stronger augmentation during training.")
     ap.add_argument("--tsne", action="store_true", default=False,
                     help="If True, visualize local and global features from both domains")
-    ap.add_argument("--n_tsne", type=int, default=100,
-                    help="Number of features to analyze in tsne.")
     
     args = ap.parse_args()
 
