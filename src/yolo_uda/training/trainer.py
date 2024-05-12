@@ -4,6 +4,7 @@ from datetime import datetime
 import torch
 import tqdm
 import wandb
+import numpy as np
 from torch import nn
 from terminaltables import AsciiTable
 from torch.utils.data import DataLoader
@@ -13,9 +14,32 @@ from pytorchyolo.utils.utils import to_cpu
 from models import Upsample
 from metrics import FeatureMapCosineSimilarity, FeatureMapEuclideanDistance
 from evaluate import _evaluate
+from metrics import TSNEVisualizer
 
 binary_accuracy = BinaryAccuracy(threshold=0.5).to('cuda')
+tsne = TSNEVisualizer(
+    n_components=2,
+    perplexity=30.0,
+    init='pca'
+)
 
+def tsne_visualization(source_features: torch.Tensor, target_features: torch.Tensor, step: int):
+
+    # preprocess source and target features
+    source_global = tsne.preprocess(x = source_features)
+    target_global = tsne.preprocess(x = target_features)
+
+    # concatenate and create labels
+    features = np.vstack([source_global, target_global])
+    labels = np.array([0]*len(source_global) + [1]*len(target_global))
+
+    # run tsne and plot
+    features_reduced = tsne.run_tsne(x = features)
+    tsne.plot_tsne(
+        features = features_reduced, 
+        labels = labels, 
+        step = step
+    )
 
 def train(
     model: nn.Module,
@@ -27,6 +51,7 @@ def train(
     validation_dataloader: DataLoader,
     save_dir: str,
     run: wandb.run,
+    visualize_tsne: bool,
     verbose: bool = False,
     epochs: int = 10,
     class_names: list = None,
@@ -64,6 +89,12 @@ def train(
         # tracker
         updated_lr_this_epoch = False
 
+        # for tsne visual
+        if visualize_tsne:
+            if epoch == 1 or epoch == epochs:
+                all_source_features = []
+                all_target_features = []
+
         for batch_i, contents in enumerate(
             tqdm.tqdm(zip(source_dataloader, target_dataloader), desc=f"Training Epoch {epoch}")
         ):
@@ -75,6 +106,10 @@ def train(
             batches_done = len(target_dataloader) * (epoch-1) + batch_i
   
             loss, loss_components, batch_discriminator_acc, source_features, target_features = model(batch=contents)
+            if visualize_tsne and source_features is not None and target_features is not None:
+                if epoch == 1 or epoch == epochs:
+                    all_source_features.append(source_features[1])
+                    all_target_features.append(target_features[1])
             if loss is None:
                 # catches incomplete training batches
                 continue
@@ -153,6 +188,18 @@ def train(
             wandb.log(loss_components, step=batches_done)
             
 
+        # perform tsne visualization
+        if visualize_tsne:
+            if epoch == 1 or epoch == epochs:
+                try:
+                    tsne_visualization(
+                        source_features = all_source_features, 
+                        target_features = all_target_features,
+                        step = batches_done
+                    )
+                except Exception as e:
+                    print(e)
+
         # Training epoch metrics
         # Discriminator accuracy
         wandb.log({"glob_dscm_acc": global_discriminator_acc["total"] / global_discriminator_acc["batch_count"]}, step=batches_done)
@@ -228,7 +275,6 @@ def train(
                     mt="f1", value=best_f1, date=save_date, epoch=epoch)
                 torch.save(model.state_dict(),
                            os.path.join(save_dir, f1_ckpt_name))
-
 
     return model
 

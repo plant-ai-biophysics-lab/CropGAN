@@ -162,6 +162,7 @@ def main(args, hyperparams, run, **kwargs):
             save_dir=save_dir,
             log_img_every_n_epochs = args.log_img_every_n_epochs,
             log_img_count = args.log_img_count,
+            visualize_tsne = args.tsne
         )
         
         save_name = f"ckpt_last_{datetime.today().strftime('%Y-%m-%d_%H-%M-%S')}.pth"
@@ -234,6 +235,8 @@ if __name__ == '__main__':
                     help="Number of images to log during validation each log_img_every_n_epochs")
     ap.add_argument("--strong-aug", action="store_true", default=False,
                     help="If True, use stronger augmentation during training.")
+    ap.add_argument("--tsne", action="store_true", default=False,
+                    help="If True, visualize local and global features from both domains")
     
     args = ap.parse_args()
 
@@ -279,7 +282,7 @@ if __name__ == '__main__':
         args.pretrained_weights = os.path.join(save_dir, "ckpt_best_map.pth")
         args.limit_val_size = False
         # Use test set, not val set
-        if args.target_val_path.split("/")[-2] == "valid":
+        if args.target_val_path.split("/")[-2] == "valid" or args.target_val_path.split("/")[-2] == "val":
             args.target_val_path = os.path.join(os.path.dirname(os.path.dirname(args.target_val_path)), "test/images")
         else:
             print(f"Running test on target_val_path: {args.target_val_path}")
