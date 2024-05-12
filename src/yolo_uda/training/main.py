@@ -162,8 +162,7 @@ def main(args, hyperparams, run, **kwargs):
             save_dir=save_dir,
             log_img_every_n_epochs = args.log_img_every_n_epochs,
             log_img_count = args.log_img_count,
-            visualize_tsne = args.tsne,
-            n_tsne = args.n_tsne
+            visualize_tsne = args.tsne
         )
         
         save_name = f"ckpt_last_{datetime.today().strftime('%Y-%m-%d_%H-%M-%S')}.pth"

@@ -52,7 +52,6 @@ def train(
     save_dir: str,
     run: wandb.run,
     visualize_tsne: bool,
-    n_tsne: int,
     verbose: bool = False,
     epochs: int = 10,
     class_names: list = None,
