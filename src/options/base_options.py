@@ -49,6 +49,7 @@ class BaseOptions():
         parser.add_argument('--preprocess', type=str, default='resize_and_crop', help='scaling and cropping of images at load time [resize_and_crop | crop | scale_width | scale_width_and_crop | none]')
         parser.add_argument('--no_flip', action='store_true', help='if specified, do not flip the images for data augmentation')
         parser.add_argument('--display_winsize', type=int, default=256, help='display window size for both visdom and HTML')
+        parser.add_argument('--strong_aug', action='store_true', help='Apply strong augs to dataset')
         # additional parameters
         parser.add_argument('--epoch', type=str, default='latest', help='which epoch to load? set to latest to use latest cached model')
         parser.add_argument('--load_iter', type=int, default='0', help='which iteration to load? if load_iter > 0, the code will load models by iter_[load_iter]; otherwise, the code will load models by [epoch]')
@@ -71,6 +72,8 @@ class BaseOptions():
         parser.add_argument("--grl_alpha", type=float, default=0.1, help="grl alpha and lambda")
         parser.add_argument("--grl_lambda", type=float, default=0.1, help="grl alpha and lambda")
         parser.add_argument("--grl_lmmd", type=float, default=0.0, help="grl lambda mmd")
+        parser.add_argument("--context-vector", action="store_true", default=False,
+                    help="If flag is passed, context vector will be used in discriminator.")
         # Logging parameters
         parser.add_argument("--wandb_name", type=str, default="default-cropgan-run", help="Name of the wandb run")
 

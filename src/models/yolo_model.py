@@ -232,6 +232,63 @@ class Darknet(nn.Module):
         yolo_outputs = to_cpu(torch.cat(yolo_outputs, 1))
         return yolo_outputs if targets is None else (loss, yolo_outputs)
 
+    def forward_features(self, x):
+        num_samples = x.shape[0]
+        feature_maps = []  # save feature maps for discriminator
+        img_size = x.size(2)
+        layer_outputs, yolo_outputs = [], []
+        # Use different feature map layers if yolov3 vs. yolov3-tiny
+        feature_map_layers = [15, 22] if self.use_tiny else [81, 93, 105]
+        for i, (module_def, module) in enumerate(zip(self.module_defs, self.module_list)):
+            if module_def["type"] in ["convolutional", "upsample", "maxpool"]:
+                x = module(x)
+            elif module_def["type"] == "route":
+                x = torch.cat([layer_outputs[int(layer_i)] for layer_i in module_def["layers"].split(",")], 1)
+            elif module_def["type"] == "shortcut":
+                layer_i = int(module_def["from"])
+                x = layer_outputs[-1] + layer_outputs[layer_i]
+            elif module_def["type"] == "yolo":
+                x, layer_loss = module[0](x, targets, img_dim)
+                loss += layer_loss
+                yolo_outputs.append(x)
+            layer_outputs.append(x)
+
+            # get all the feature maps
+            if i in feature_map_layers:
+                feature_maps.append(x)
+
+        # return just the feature maps
+        return feature_maps
+
+    def forward_with_context(self, x, global_context, local_context, targets=None):
+        num_samples = x.shape[0]
+        feature_maps = []
+        img_size = x.size(2)
+        loss = 0
+        layer_outputs, yolo_outputs = [], []
+        # Use different feature map layers if yolov3 vs. yolov3-tiny
+        feature_map_layers = [15, 22] if self.use_tiny else [81, 93, 105]
+        for i, (module_def, module) in enumerate(zip(self.module_defs, self.module_list)):
+            if module_def["type"] in ["convolutional", "upsample", "maxpool"]:
+                x = module(x)
+            elif module_def["type"] == "route":
+                x = torch.cat([layer_outputs[int(layer_i)] for layer_i in module_def["layers"].split(",")], 1)
+            elif module_def["type"] == "shortcut":
+                layer_i = int(module_def["from"])
+                x = layer_outputs[-1] + layer_outputs[layer_i]
+            elif module_def["type"] == "yolo":
+                x, layer_loss = module[0](x, targets, img_dim)
+                loss += layer_loss
+                yolo_outputs.append(x)
+            layer_outputs.append(x)
+
+            # if this is the last feature map, concatenate with the global & local context
+            if i == feature_map_layers[-1]:
+                x = self.context_fusion(x, global_context, local_context)
+    
+        yolo_outputs = to_cpu(torch.cat(yolo_outputs, 1))
+        return yolo_outputs if targets is None else (loss, yolo_outputs)
+
     def create_modules(self,module_defs):
         """
         Constructs module list of layer blocks from module configuration in module_defs
@@ -300,7 +357,6 @@ class Darknet(nn.Module):
             output_filters.append(filters)
 
         return hyperparams, module_list
-
 
     def load_darknet_weights(self, weights_path):
         """Parses and loads the weights stored in 'weights_path'"""

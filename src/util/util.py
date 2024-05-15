@@ -7,7 +7,7 @@ import os
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import cv2 as cv
-import util.util_yolo as util_yolo
+import src.util.util_yolo as util_yolo
 import time
 import tqdm
 
@@ -364,8 +364,13 @@ def plot_analysis_double_task(model, data, figsize=[12, 12],
     if plot_detections:
         # Real A
         # de-normalize the image before feed into the yolo net
-        loss_yolo_b, bbox_outputs = model.netYoloA(
-            model.real_A*0.5+0.5, model.A_label)
+        domain_labels = torch.zeros((model.real_A.shape[0],), dtype=torch.float32)
+        batch = {
+            "imgs": model.real_A*0.5+0.5,
+            "targets": model.A_label,
+            "domain_labels": domain_labels
+        }
+        loss_yolo_b, bbox_outputs = model.netYoloA(batch)
         detections_nms = util_yolo.non_max_suppression(
             bbox_outputs, conf_thres=conf_thres, nms_thres=nms_thres)
         if hasattr(model.real_A, 'cpu'):
@@ -379,8 +384,13 @@ def plot_analysis_double_task(model, data, figsize=[12, 12],
 
         # Fake B
         # de-normalize the image before feed into the yolo net
-        loss_yolo_b, bbox_outputs = model.netYoloB(
-            model.fake_B*0.5+0.5, model.A_label)
+        domain_labels = torch.ones((model.fake_B.shape[0],), dtype=torch.float32)
+        batch = {
+            "imgs": model.fake_B*0.5+0.5,
+            "targets": model.A_label,
+            "domain_labels": domain_labels
+        }
+        loss_yolo_b, bbox_outputs = model.netYoloB(batch)
         detections_nms = util_yolo.non_max_suppression(
             bbox_outputs, conf_thres=conf_thres, nms_thres=nms_thres)
         plot_image_with_detections(
@@ -388,16 +398,26 @@ def plot_analysis_double_task(model, data, figsize=[12, 12],
 
         # Real B
         # de-normalize the image before feed into the yolo net
-        loss_yolo_b, bbox_outputs = model.netYoloB(
-            model.real_B*0.5+0.5, model.A_label)
+        domain_labels = torch.ones((model.real_B.shape[0],), dtype=torch.float32)
+        batch = {
+            "imgs": model.real_B*0.5+0.5,
+            "targets": model.A_label,
+            "domain_labels": domain_labels
+        }
+        loss_yolo_b, bbox_outputs = model.netYoloB(batch)
         detections_nms = util_yolo.non_max_suppression(
             bbox_outputs, conf_thres=conf_thres, nms_thres=nms_thres)
         plot_image_with_detections(model.real_B, detections_nms,  ax=ax_grids[1][0])
 
         # Fake A
         # de-normalize the image before feed into the yolo net
-        loss_yolo_b, bbox_outputs = model.netYoloA(
-            model.fake_A*0.5+0.5, model.A_label)
+        domain_labels = torch.zeros((model.fake_A.shape[0],), dtype=torch.float32)
+        batch = {
+            "imgs": model.fake_A*0.5+0.5,
+            "targets": model.A_label,
+            "domain_labels": domain_labels
+        }
+        loss_yolo_b, bbox_outputs = model.netYoloA(batch)
         detections_nms = util_yolo.non_max_suppression(
             bbox_outputs, conf_thres=conf_thres, nms_thres=nms_thres)
         plot_image_with_detections(model.fake_A, detections_nms,  ax=ax_grids[1][1])
@@ -413,15 +433,25 @@ def plot_analysis_double_task(model, data, figsize=[12, 12],
         if plot_detections:
             # labeled_B
             # de-normalize the image before feed into the yolo net
-            loss_yolo_b, bbox_outputs = model.netYoloB(
-                model.labeled_B*0.5+0.5, model.labeled_B_label)
+            domain_labels = torch.ones((model.labeled_B.shape[0],), dtype=torch.float32)
+            batch = {
+                "imgs": model.labeled_B*0.5+0.5,
+                "targets": model.labeled_B_label,
+                "domain_labels": domain_labels
+            }
+            loss_yolo_b, bbox_outputs = model.netYoloB(batch)
             detections_nms = util_yolo.non_max_suppression(
                 bbox_outputs, conf_thres=conf_thres, nms_thres=nms_thres)
             plot_image_with_detections(model.labeled_B, detections_nms,  model.labeled_B_label, ax=ax_grids[0][2])
             # fake_labeled_A
             # de-normalize the image before feed into the yolo net
-            loss_yolo_b, bbox_outputs = model.netYoloA(
-                model.fake_labeled_A*0.5+0.5, model.labeled_B_label)
+            domain_labels = torch.zeros((model.fake_labeled_A.shape[0],), dtype=torch.float32)
+            batch = {
+                "imgs": model.fake_labeled_A*0.5+0.5,
+                "targets": model.labeled_B_label,
+                "domain_labels": domain_labels
+            }
+            loss_yolo_b, bbox_outputs = model.netYoloA(batch)
             detections_nms = util_yolo.non_max_suppression(
                 bbox_outputs, conf_thres=conf_thres, nms_thres=nms_thres)
             plot_image_with_detections(model.fake_labeled_A, detections_nms,  model.labeled_B_label, ax=ax_grids[1][2])

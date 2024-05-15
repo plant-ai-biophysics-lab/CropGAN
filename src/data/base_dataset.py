@@ -80,9 +80,20 @@ def get_params(opt, size):
 
 
 def get_transform(opt, params=None, img_size=[512, 512], grayscale=False, method=Image.BICUBIC, convert=True):
+    
+    if opt.strong_aug:
+        transform_list = [
+            aug.Affine(rotate=(-10, 10), translate_percent=(-0.1, 0.1), scale=(0.8, 1.5), p=0.3),
+            aug.RandomBrightnessContrast(brightness_limit=(-0.1, 0.1), contrast_limit=0.1, p=0.3),
+            aug.HueSaturationValue(hue_shift_limit=10, sat_shift_limit=20, val_shift_limit=10, p=0.3), 
+        ]
+    else:
+        transform_list = []
+
     if 'aug' in opt.preprocess:
         # DIY augmentation process
-        transform_list = []
+        # transform_list = []
+        print('Using custom augmentations...')
         transform_list.append(aug.augmentations.crops.transforms.RandomResizedCrop(height=opt.crop_size, width=opt.crop_size, 
                                             scale=(0.2, 1.0), 
                                             interpolation=1, 
@@ -98,7 +109,7 @@ def get_transform(opt, params=None, img_size=[512, 512], grayscale=False, method
         return transform_A, transform_B
 
     else:
-        transform_list = []
+        # transform_list = []
         if grayscale:
             transform_list.append(transforms.Grayscale(1))
         if 'resize' in opt.preprocess and opt.random_view == 0:

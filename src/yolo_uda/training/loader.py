@@ -1,12 +1,36 @@
 import random
 import os
 
+import imgaug.augmenters as iaa
 from torch.utils.data import DataLoader
 from pytorchyolo.utils.augmentations import AUGMENTATION_TRANSFORMS
 from pytorchyolo.utils.transforms import DEFAULT_TRANSFORMS
 from pytorchyolo.utils.utils import worker_seed_set
-
+from torchvision import transforms
+from pytorchyolo.utils.transforms import ToTensor, PadSquare, RelativeLabels, AbsoluteLabels, ImgAug
+from pytorchyolo.utils.augmentations import DefaultAug
 from datasets import UDAListDataset
+
+class StrongAug(ImgAug):
+    def __init__(self, ):
+        self.augmentations = iaa.Sequential([
+            iaa.Dropout([0.0, 0.05]),
+            # iaa.Sharpen((0.0, 0.1)),
+            iaa.Affine(rotate=(-10, 10), translate_percent=(-0.1, 0.1), scale=(0.8, 1.5)),
+            iaa.AddToBrightness((-60, 40)),
+            iaa.AddToHueAndSaturation(value_saturation=(-20, 20),value_hue=(-20,20)),
+            iaa.Fliplr(0.5),
+        ])
+
+STRONG_TRANSFORMS = transforms.Compose([
+    AbsoluteLabels(),
+    # DefaultAug(),
+    StrongAug(),
+    # transforms.GaussianBlur(kernel_size=5),
+    PadSquare(),
+    RelativeLabels(),
+    ToTensor(),
+])
 
 K_VAL_MAP = {
     -1:24, # Use for test runs, 24 is the full test set
@@ -92,7 +116,7 @@ def prepare_data(train_path, target_train_path, target_val_path, K=0, skip_prepa
             print(f"File paths have been saved to {fname}")
 
         
-def _create_data_loader(img_path, batch_size, img_size, n_cpu, label_path=None, multiscale_training=False):
+def _create_data_loader(img_path, batch_size, img_size, n_cpu, label_path=None, multiscale_training=False, strong_aug=False):
     """Creates a DataLoader for training.
 
     :param img_path: Path to file containing all paths to training images.
@@ -108,12 +132,13 @@ def _create_data_loader(img_path, batch_size, img_size, n_cpu, label_path=None, 
     :return: Returns DataLoader
     :rtype: DataLoader
     """
+    transforms = STRONG_TRANSFORMS if strong_aug else AUGMENTATION_TRANSFORMS
     dataset = UDAListDataset(
         img_path,
         label_path=label_path,
         img_size=img_size,
         multiscale=multiscale_training,
-        transform=AUGMENTATION_TRANSFORMS)
+        transform=transforms)
     print(dataset.collate_fn)
     dataloader = DataLoader(
         dataset,

@@ -5,14 +5,18 @@ from .base_model import BaseModel
 from . import networks
 
 from models.yolo_model import Darknet
-from yolo_uda.training.models import YoloDA, load_yolo_weights
+from yolo_uda.training.models import GRLDarknet, GlobalDiscriminator, LocalDiscriminator
+from yolo_uda.training.evaluate import compose_discriminator_batch_evaluation, discriminator_step
 import os
 
+from torch.nn import Upsample
+import torch.nn as nn
 
-class DoubleTaskCycleGanModel(BaseModel):
+
+class DoubleTaskCycleGanContextModel(BaseModel):
     """
-    This class implements the CycleGAN model with semantic constrain 
-    (The translated domain should have same semantic as the original domain), 
+    This class implements the CycleGAN model with semantic constrain
+    (The translated domain should have same semantic as the original domain),
     for learning image-to-image translation without paired data.
 
     The model training requires '--dataset_mode unaligned' dataset.
@@ -22,6 +26,7 @@ class DoubleTaskCycleGanModel(BaseModel):
 
     CycleGAN paper: https://arxiv.org/pdf/1703.10593.pdf
     """
+
     @staticmethod
     def modify_commandline_options(parser, is_train=True):
         """Add new dataset-specific options, and rewrite default values for existing options.
@@ -51,11 +56,12 @@ class DoubleTaskCycleGanModel(BaseModel):
                                 other than 0 has an effect of scaling the weight of the identity mapping loss. For example, if the 
                                 weight of the identity loss should be 10 times smaller than the weight of the reconstruction loss, 
                                 please set lambda_identity = 0.1""")
-            parser.add_argument('--lambda_yolo_b', type=float, default=0.0, help='weight for yolo loss on fake B (G_B(A))')
-            parser.add_argument('--lambda_yolo_a', type=float, default=0.0, help='weight for yolo loss on fake A (G_A(B))')
-            parser.add_argument('--refine_yolo_b_step', type=int, default=0, help='number of step refine yolo b on one shot image')
-
-
+            parser.add_argument('--lambda_yolo_b', type=float, default=0.0,
+                                help='weight for yolo loss on fake B (G_B(A))')
+            parser.add_argument('--lambda_yolo_a', type=float, default=0.0,
+                                help='weight for yolo loss on fake A (G_A(B))')
+            parser.add_argument('--refine_yolo_b_step', type=int, default=0,
+                                help='number of step refine yolo b on one shot image')
 
         return parser
 
@@ -103,87 +109,89 @@ class DoubleTaskCycleGanModel(BaseModel):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print("YOLO Device: ", device)
         if opt.use_grl:
-            # self.netYoloA = GRLDarknet(opt.task_model_def, img_size=opt.yolo_img_size).to(device)
-            # self.netYoloB = GRLDarknet(opt.task_model_def, img_size=opt.yolo_img_size).to(device)
-            use_tiny = 'tiny' in opt.task_model_def
-
-            self.netYoloA = YoloDA.create_from_config(
-                config=opt.task_model_def,
-                context=opt.context_vector,
-                alpha=opt.grl_alpha,
-                use_tiny=use_tiny,
-                batch_size=opt.batch_size,
-                global_disc_loss_func=torch.nn.BCELoss(),
-                lambda_mmd= opt.grl_lmmd,
-                lambda_discriminator= opt.grl_lambda,
-                device=device
-                )
-            
-            self.netYoloB = YoloDA.create_from_config(
-                config=opt.task_model_def,
-                context=opt.context_vector,
-                alpha=opt.grl_alpha,
-                use_tiny=use_tiny,
-                batch_size=opt.batch_size,
-                global_disc_loss_func=torch.nn.BCELoss(),
-                lambda_mmd= opt.grl_lmmd,
-                lambda_discriminator= opt.grl_lambda,
-                device=device
-                )
-
+            self.netYoloA = GRLDarknet(opt.task_model_def, img_size=opt.yolo_img_size).to(device)
+            self.netYoloB = GRLDarknet(opt.task_model_def, img_size=opt.yolo_img_size).to(device)
         else:
             self.netYoloA = Darknet(opt.task_model_def, img_size=opt.yolo_img_size).to(device)
             self.netYoloB = Darknet(opt.task_model_def, img_size=opt.yolo_img_size).to(device)
+        self.netLocalDiscA = LocalDiscriminator(alpha=opt.lambda_yolo_a).to(device)
+        self.netLocalDiscB = LocalDiscriminator(alpha=opt.lambda_yolo_b).to(device)
+        self.netGlobalDiscA = GlobalDiscriminator(alpha=opt.lambda_yolo_a).to(device)
+        self.netGlobalDiscB = GlobalDiscriminator(alpha=opt.lambda_yolo_b).to(device)
 
         # load yolo weights
         if opt.yolo_a_weights != '':
-            if opt.yolo_a_weights.endswith(".pth"):
-                # Load checkpoint weights
-                self.netYoloA.load_state_dict(torch.load(opt.yolo_a_weights, map_location=device),strict=False)
-            else:
+            if opt.yolo_a_weights.endswith(".weights"):
                 # Load darknet weights
-                self.netYoloA.yolo_model = load_yolo_weights(self.netYoloA.yolo_model, opt.yolo_a_weights)
+                self.netYoloA.load_darknet_weights(opt.yolo_a_weights)
+            else:
+                # Load checkpoint weights
+                self.netYoloA.load_state_dict(torch.load(opt.yolo_a_weights))
             print("Load yolo a weights: ", opt.yolo_a_weights)
         else:
             print("No yolo a weights loaded ")
 
         # load yolo weights
         if opt.yolo_b_weights != '':
-            if opt.yolo_b_weights.endswith(".pth"):
-                # Load checkpoint weights
-                self.netYoloB.load_state_dict(torch.load(opt.yolo_b_weights, map_location=device),strict=False)
-            else:
+            if opt.yolo_b_weights.endswith(".weights"):
                 # Load darknet weights
-                self.netYoloB.yolo_model = load_yolo_weights(self.netYoloB.yolo_model, opt.yolo_b_weights)
+                self.netYoloB.load_darknet_weights(opt.yolo_b_weights)
+            else:
+                # Load checkpoint weights
+                self.netYoloB.load_state_dict(torch.load(opt.yolo_b_weights))
             print("Load yolo b weights: ", opt.yolo_b_weights)
         else:
             print("No yolo b weights loaded ")
+            
+        # load discriminator A weights
+        if opt.global_discriminator_weight != '':
+            self.netGlobalDiscA.load_state_dict(torch.load(opt.global_discriminator_weight))
+            print("Load global discriminator weights: ", opt.global_discriminator_weight)
+            self.netGlobalDiscB.load_state_dict(torch.load(opt.global_discriminator_weight))
+            print("Load global discriminator weights: ", opt.global_discriminator_weight)
+        else:
+            print("No global discriminator weights loaded ")
+
+        # load discriminator B weights
+        if opt.local_discriminator_weight != '':
+            self.netLocalDiscA.load_state_dict(torch.load(opt.local_discriminator_weight))
+            print("Load local discriminator weights: ", opt.local_discriminator_weight)
+            self.netLocalDiscB.load_state_dict(torch.load(opt.local_discriminator_weight))
+            print("Load local discriminator weights: ", opt.local_discriminator_weight)
+        else:
+            print("No local discriminator weights loaded ")
+
         self.netYoloA.eval()  # Set in evaluation mode
         self.netYoloB.eval()  # Set in evaluation mode
-
+        self.netLocalDiscA.eval()  # Set in evaluation mode
+        self.netLocalDiscB.eval()  # Set in evaluation mode
+        self.netGlobalDiscA.eval()  # Set in evaluation mode
+        self.netGlobalDiscB.eval()  # Set in evaluation mode
 
         if self.isTrain:
             if opt.lambda_identity > 0.0:  # only works when input and output images have the same number of channels
-                assert(opt.input_nc == opt.output_nc)
+                assert (opt.input_nc == opt.output_nc)
             self.fake_A_pool = ImagePool(opt.pool_size)  # create image buffer to store previously generated images
             self.fake_B_pool = ImagePool(opt.pool_size)  # create image buffer to store previously generated images
-            self.fake_labeled_A_pool = ImagePool(opt.pool_size)  # create image buffer to store previously generated images
+            self.fake_labeled_A_pool = ImagePool(
+                opt.pool_size)  # create image buffer to store previously generated images
 
             # define loss functions
             self.criterionGAN = networks.GANLoss(opt.gan_mode).to(self.device)  # define GAN loss.
             self.criterionCycle = torch.nn.L1Loss()
             self.criterionIdt = torch.nn.L1Loss()
             # initialize optimizers; schedulers will be automatically created by function <BaseModel.setup>.
-            self.optimizer_G = torch.optim.Adam(itertools.chain(self.netG_A.parameters(), self.netG_B.parameters()), lr=opt.g_lr, betas=(opt.beta1, 0.999))
-            self.optimizer_D = torch.optim.Adam(itertools.chain(self.netD_A.parameters(), self.netD_B.parameters()), lr=opt.d_lr, betas=(opt.beta1, 0.999))
-            # self.optimizer_yolo_a = torch.optim.Adam(self.netYoloA.parameters(), lr=opt.lr)
-            # self.optimizer_yolo_b = torch.optim.Adam(self.netYoloB.parameters(), lr=opt.lr)
+            self.optimizer_G = torch.optim.Adam(itertools.chain(self.netG_A.parameters(), self.netG_B.parameters()),
+                                                lr=opt.g_lr, betas=(opt.beta1, 0.999))
+            self.optimizer_D = torch.optim.Adam(itertools.chain(self.netD_A.parameters(), self.netD_B.parameters()),
+                                                lr=opt.d_lr, betas=(opt.beta1, 0.999))
+            self.optimizer_yolo_a = torch.optim.Adam(self.netYoloA.parameters(), lr=opt.lr)
+            self.optimizer_yolo_b = torch.optim.Adam(self.netYoloB.parameters(), lr=opt.lr)
 
             self.optimizers.append(self.optimizer_G)
             self.optimizers.append(self.optimizer_D)
-            # self.optimizers.append(self.optimizer_yolo_a)
-            # self.optimizers.append(self.optimizer_yolo_b)
-
+            self.optimizers.append(self.optimizer_yolo_a)
+            self.optimizers.append(self.optimizer_yolo_b)
 
             # double task
             self.refine_step = opt.refine_yolo_b_step
@@ -197,13 +205,13 @@ class DoubleTaskCycleGanModel(BaseModel):
         The option 'direction' can be used to swap domain A and domain B.
         """
         AtoB = self.opt.direction == 'AtoB'
-        self.real_A = input['A' if AtoB else 'B'].to(self.device) # actual synthetic images ('real' means didn't go thru GAN)
-        self.real_B = input['B' if AtoB else 'A'].to(self.device) # actual real images
+        self.real_A = input['A' if AtoB else 'B'].to(
+            self.device)  # actual synthetic images ('real' means didn't go thru GAN)
+        self.real_B = input['B' if AtoB else 'A'].to(self.device)  # actual real images
         self.labeled_B = input['labeled_B'].to(self.device)
         self.image_paths = input['A_paths' if AtoB else 'B_paths']
         self.A_task = input['A_task'].to(self.device)
         self.A_label = input['A_label'].to(self.device)
-
         self.labeled_B_label = input['labeled_B_label'].to(self.device)
 
     def set_yolo_input(self, input):
@@ -238,11 +246,13 @@ class DoubleTaskCycleGanModel(BaseModel):
     def forward(self):
         """Run forward pass; called by both functions <optimize_parameters> and <test>."""
         self.fake_B = self.netG_A(self.real_A)  # G_A(A) - synthetic images + GAN -> "real"-ish images
-        self.rec_A = self.netG_B(self.fake_B)   # G_B(G_A(A)) - synth -> real -> synth again
+        self.rec_A = self.netG_B(self.fake_B)  # G_B(G_A(A)) - synth -> real -> synth again
         self.fake_A = self.netG_B(self.real_B)  # G_B(B) - real images + GAN -> "synthetic"-ish images
-        self.rec_B = self.netG_A(self.fake_A)   # G_A(G_B(B)) - real -> synth -> real again
-        self.fake_labeled_A = self.netG_B(self.labeled_B)  # G_B(B) - same as rec_B, but it's the real images with labels
-        self.rec_labeled_B = self.netG_A(self.fake_labeled_A)  # G_A(G_B(B)) - same as fake A, but it's the real images with labels
+        self.rec_B = self.netG_A(self.fake_A)  # G_A(G_B(B)) - real -> synth -> real again
+        self.fake_labeled_A = self.netG_B(
+            self.labeled_B)  # G_B(B) - same as rec_B, but it's the real images with labels
+        self.rec_labeled_B = self.netG_A(
+            self.fake_labeled_A)  # G_A(G_B(B)) - same as fake A, but it's the real images with labels
 
     def forward_fake_B(self, no_grad=False):
         """Generate fake B"""
@@ -259,7 +269,6 @@ class DoubleTaskCycleGanModel(BaseModel):
                 self.fake_A = self.netG_B(self.real_B)  # G_B(B)
         else:
             self.fake_A = self.netG_B(self.real_B)  # G_B(B)
-
 
     def backward_D_basic(self, netD, real, fake):
         """Calculate GAN loss for the discriminator
@@ -299,7 +308,7 @@ class DoubleTaskCycleGanModel(BaseModel):
             fake_labeled_A = self.fake_labeled_A_pool.query(self.fake_labeled_A)
             loss_D_B2 = self.backward_D_basic(self.netD_B, self.real_A, fake_labeled_A)
             self.loss_D_B += loss_D_B2
-    
+
     # MHS: Not in use - Not different enough from loss_yolo_b below
     # def backward_YOLO_B(self):
     #     """Calculate YOLO B loss for Fake B and label A"""
@@ -308,10 +317,13 @@ class DoubleTaskCycleGanModel(BaseModel):
     #         self.loss_yolo_b = lambda_yolo_b * loss_yolo_b
     #     else:
     #         self.loss_yolo_b = 0
-    #     return self.loss_yolo_b 
+    #     return self.loss_yolo_b
 
     def backward_G(self):
         """Calculate the loss for generators G_A and G_B"""
+        downsample_2 = Upsample(scale_factor=0.5, mode="nearest")
+        downsample_4 = Upsample(scale_factor=0.25, mode="nearest")
+
         lambda_idt = self.opt.lambda_identity
         lambda_A = self.opt.lambda_A
         lambda_B = self.opt.lambda_B
@@ -334,7 +346,7 @@ class DoubleTaskCycleGanModel(BaseModel):
         self.loss_G_A = self.criterionGAN(self.netD_A(self.fake_B), True)
         # GAN loss D_B(G_B(B))
         self.loss_G_B = self.criterionGAN(self.netD_B(self.fake_A), True)
-        
+
         # Forward cycle loss || G_B(G_A(A)) - A||
         self.loss_cycle_A = self.criterionCycle(self.rec_A, self.real_A) * lambda_A
         # Backward cycle loss || G_A(G_B(B)) - B||
@@ -342,29 +354,81 @@ class DoubleTaskCycleGanModel(BaseModel):
 
         # YOLO task loss
         # loss_yolo_b: How well the model predicts on synth->real images
-        if lambda_yolo_b > 0 and self.A_label.shape[0] > 0:
-            # fake_B label should be real
-            domain_labels = torch.ones((self.fake_B.shape[0],), dtype=torch.float32, device=self.device)
-            batch = {
-                "imgs": self.fake_B*0.5+0.5,
-                "targets": self.A_label,
-                "domain_labels": domain_labels
-            }
-            loss_yolo_b, self.bbox_outputs = self.netYoloB(batch) # de-normalize the image before feed into the yolo net
+        if lambda_yolo_b > 0:
+            # loss_yolo_b, self.bbox_outputs = self.netYoloB(self.fake_B * 0.5 + 0.5,
+            #                                                self.A_label)  # de-normalize the image before feed into the yolo net
+
+            yolo_b_source_features = self.netYoloB.forward_features(self.fake_B * 0.5 + 0.5,
+                                                                    return_feature_maps=True)
+            print([f.shape for f in yolo_b_source_features], 'feature shapes')
+
+            features, disc_labels = compose_discriminator_batch_evaluation(
+                source_features=yolo_b_source_features,
+                downsample_2=downsample_2,
+                downsample_4=downsample_4,
+                labels_source=torch.ones((self.fake_B.shape[0],), dtype=torch.float32, device=self.device),
+                device=self.device
+            )
+
+            # discriminator_step handles both gl=obal and local
+            (global_discriminator_loss, local_discriminator_loss, batch_discriminator_acc,
+             global_context, local_context) = discriminator_step(
+                global_discriminator=self.netGlobalDiscB,
+                local_discriminator=self.netLocalDiscB,
+                map_features=features,
+                labels=disc_labels,
+                global_discriminator_loss_function=nn.BCELoss(),
+                local_discriminator_loss_function=nn.MSELoss()
+            )
+
+            # duplicate along the first dimension for the global and local context
+            global_context = global_context.repeat(2, 1)
+            local_context = local_context.repeat(2, 1, 1, 1)
+
+            # print('evaluate shape', imgs.shape, global_context.shape, local_context.shape)
+
+            # get the source outputs with the context
+            loss_yolo_b, outputs = self.netYoloB.forward_with_context(imgs, global_context, local_context)
             self.loss_yolo_b = lambda_yolo_b * loss_yolo_b
         else:
             self.loss_yolo_b = 0
 
         # loss_yolo_a: How well the model predicts on real->synth images
-        if lambda_yolo_a > 0 and self.labeled_B_label.shape[0] > 0:
-            # fake_labeled_A label should be synthetic
-            domain_labels = torch.zeros((self.fake_labeled_A.shape[0],), dtype=torch.float32, device=self.device)
-            batch = {
-                "imgs": self.fake_labeled_A*0.5+0.5,
-                "targets": self.labeled_B_label,
-                "domain_labels": domain_labels
-            }
-            loss_yolo_a, self.bbox_outputs_a = self.netYoloA(batch) # de-normalize the image before feed into the yolo net
+        if lambda_yolo_a > 0:
+            # loss_yolo_a, self.bbox_outputs_a = self.netYoloA(self.fake_labeled_A * 0.5 + 0.5,
+            #                                                  self.labeled_B_label)  # de-normalize the image before feed into the yolo net
+
+            yolo_a_source_features = self.netYoloA.forward_features(self.fake_labeled_A * 0.5 + 0.5,
+                                                                    return_feature_maps=True)
+
+            features, disc_labels = compose_discriminator_batch_evaluation(
+                source_features=yolo_a_source_features,
+                downsample_2=downsample_2,
+                downsample_4=downsample_4,
+                labels_source=torch.ones((self.fake_labeled_A.shape[0],), dtype=torch.float32, device=self.device),
+                device=device
+            )
+
+            # discriminator_step handles both global and local
+            (global_discriminator_loss, local_discriminator_loss, batch_discriminator_acc,
+                global_context, local_context) = discriminator_step(
+                global_discriminator=self.netGlobalDiscA,
+                local_discriminator=self.netLocalDiscA,
+                map_features=features,
+                labels=disc_labels,
+                global_discriminator_loss_function=nn.BCELoss(),
+                local_discriminator_loss_function=nn.MSELoss()
+            )
+
+            # duplicate along the first dimension for the global and local context
+            global_context = global_context.repeat(2, 1)
+            local_context = local_context.repeat(2, 1, 1, 1)
+
+            # print('evaluate shape', imgs.shape, global_context.shape, local_context.shape)
+
+            # get the source outputs with the context
+            loss_yolo_a, outputs = self.netYoloA.forward_with_context(imgs, global_context, local_context)
+
             self.loss_G_B2 = self.criterionGAN(self.netD_B(self.fake_labeled_A), True)
             self.loss_yolo_a = lambda_yolo_a * loss_yolo_a
         else:
@@ -384,20 +448,19 @@ class DoubleTaskCycleGanModel(BaseModel):
     def optimize_parameters(self):
         """Calculate losses, gradients, and update network weights; called in every training iteration"""
         # forward
-        self.forward()      # compute fake images and reconstruction images.
-        
+        self.forward()  # compute fake images and reconstruction images.
+
         # G_A and G_B
         self.set_requires_grad([self.netD_A, self.netD_B], False)  # Ds require no gradients when optimizing Gs
         self.set_requires_grad([self.netYoloA], False)  # Ds require no gradients when optimizing Gs
-        self.set_requires_grad([self.netYoloB], False)  # Ds require no gradients when optimizing Gs
         self.optimizer_G.zero_grad()  # set G_A and G_B's gradients to zero
-        self.backward_G()             # calculate gradients for G_A and G_B
-        self.optimizer_G.step()       # update G_A and G_B's weights
+        self.backward_G()  # calculate gradients for G_A and G_B
+        self.optimizer_G.step()  # update G_A and G_B's weights
         # D_A and D_B
         self.set_requires_grad([self.netD_A, self.netD_B], True)
-        self.optimizer_D.zero_grad()   # set D_A and D_B's gradients to zero
-        self.backward_D_A()      # calculate gradients for D_A
-        self.backward_D_B()      # calculate graidents for D_B
+        self.optimizer_D.zero_grad()  # set D_A and D_B's gradients to zero
+        self.backward_D_A()  # calculate gradients for D_A
+        self.backward_D_B()  # calculate graidents for D_B
         self.optimizer_D.step()  # update D_A and D_B's weights
 
         # # YOLO_B
@@ -405,15 +468,11 @@ class DoubleTaskCycleGanModel(BaseModel):
         # self.backward_YOLO_B()   # calculate gradients for YOLO B
         # self.optimizer_yolo_b.step()  # update D_A and D_B's weights
 
-
-
     def optimize_yolo_parameters(self):
         """Generate fake images, calculaye losses, gradients, and update YOLO weights; called in YOLO training step"""
         # TODO Waiting implement
         pass
 
-    
     def train_refined_yolo_b(self):
         # TODO Waiting implement
         pass
-        
