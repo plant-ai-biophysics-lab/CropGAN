@@ -124,7 +124,7 @@ class YoloTaskReverseDataset(BaseDataset):
         labeled_B_img = Image.open(labeled_B_path).convert('RGB')
 
         if 'aug' in self.opt.preprocess:
-            self.transform_A, self.transform_B  = get_transform(self.opt, img_size=A_img.size, grayscale=(self.input_nc == 1))
+            self.transform_A, self.transform_B = get_transform(self.opt, img_size=A_img.size, grayscale=(self.input_nc == 1))
             
             # Preprocess for A
             A_label_path = A_path.replace("train", "label").replace(".png", ".txt").replace(".jpg", ".txt").replace(".jpeg", ".txt")
@@ -138,8 +138,9 @@ class YoloTaskReverseDataset(BaseDataset):
             try:
                 A_transformed = self.transform_A(image=A_img, bboxes=boxes[:, 1:], class_labels=class_labels)
             except ValueError as e:
-                print("e: ", e)
-                print("boxes: ", A_label_path, boxes)
+                # print("e: ", e)
+                # print("boxes: ", A_label_path, boxes)
+                raise e
 
             A = A_transformed["image"]
             A_transformed_bboxes = A_transformed['bboxes']

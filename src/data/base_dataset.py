@@ -8,8 +8,9 @@ import torch.utils.data as data
 from PIL import Image
 import torchvision.transforms as transforms
 from abc import ABC, abstractmethod
-import albumentations as aug
-from albumentations.pytorch import transforms as aug_pytorch_transforms
+import albumentations as A
+from albumentations.pytorch import transforms as APT
+
 
 class BaseDataset(data.Dataset, ABC):
     """This class is an abstract base class (ABC) for datasets.
@@ -79,13 +80,102 @@ def get_params(opt, size):
     return {'crop_pos': (x, y), 'flip': flip}
 
 
+class CropGANStrongAugmentation(object):
+    def __init__(self, opt):
+        self.transform_list = [
+            A.Affine(rotate=(-10, 10), translate_percent=(-0.1, 0.1), scale=(0.8, 1.5), p=0.3),
+            A.RandomBrightnessContrast(brightness_limit=(-0.1, 0.1), contrast_limit=0.1, p=0.3),
+            A.HueSaturationValue(hue_shift_limit=10, sat_shift_limit=20, val_shift_limit=10, p=0.3),
+            A.augmentations.crops.transforms.RandomResizedCrop(
+                height=opt.crop_size, width=opt.crop_size,
+                scale=(0.2, 1.0),
+                interpolation=1,
+                always_apply=False,
+                p=1)
+        ]
+
+        self.composed_transform = A.ReplayCompose(
+            self.transform_list,
+            bbox_params=bbox_params
+        )
+
+        self.resized_transform = [A.augmentations.crops.transforms.RandomResizedCrop(
+            height=opt.crop_size, width=opt.crop_size,
+            scale=(0.2, 1.0),
+            interpolation=1,
+            always_apply=False,
+            p=1
+        )]
+
+        self.only_resized_crop = A.ReplayCompose(
+            self.resized_transform,
+            bbox_params=bbox_params
+        )
+
+        self.post_transform_list = [
+            A.HorizontalFlip(p=0.5),
+            A.transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+            APT.ToTensorV2()
+        ]
+
+        self.post_transform = A.Compose(
+            self.post_transform_list,
+            bbox_params=bbox_params
+        )
+
+    def __call__(self, image, bboxes, class_labels):
+        original_image = image.copy()
+        transformed = self.composed_transform(image=image, bboxes=bboxes, class_labels=class_labels)
+
+        # filter out only the resized crop from the transforms
+        replay_params = transformed['replay']
+        replay_params['transforms'] = [replay_params['transforms'][-1]]
+        replay_params['bbox_params'] = None
+        original_image = A.ReplayCompose.replay(replay_params, image=original_image)['image']
+
+        # Check the highest possible y-value and lowest possible y-value for the bounding
+        # boxes corresponding to that image
+        max_y = 0
+        min_y = 1
+        for bbox in transformed['bboxes']:
+            max_y = max(max_y, bbox[1])
+            min_y = min(min_y, bbox[1])
+        max_y = int(max_y * transformed['image'].shape[0])
+        min_y = int(min_y * transformed['image'].shape[0])
+
+        # replace the regions outside of the bounding boxes with the original image
+        transformed['image'][
+            :min_y, :, :
+        ] = original_image[:min_y, :, :]
+        transformed['image'][
+            max_y:, :, :
+        ] = original_image[max_y:, :, :]
+
+        transformed = self.post_transform(image=transformed['image'],
+                                          bboxes=transformed['bboxes'],
+                                          class_labels=transformed['class_labels'])
+
+        return transformed
+
+    def make_transform_B(self):
+        class TransformB:
+            def __init__(self, transform_list):
+                self.full_transform = A.Compose(transform_list)
+
+            def __call__(self, *args, **kwargs):
+                return self.full_transform(*args, **kwargs)
+
+        transforms_B = self.transform_list + self.resized_transform + self.post_transform_list
+        return TransformB(transform_list=transforms_B)
+
+
 def get_transform(opt, params=None, img_size=[512, 512], grayscale=False, method=Image.BICUBIC, convert=True):
-    
+
     if opt.strong_aug:
         transform_list = [
-            aug.Affine(rotate=(-10, 10), translate_percent=(-0.1, 0.1), scale=(0.8, 1.5), p=0.3),
-            aug.RandomBrightnessContrast(brightness_limit=(-0.1, 0.1), contrast_limit=0.1, p=0.3),
-            aug.HueSaturationValue(hue_shift_limit=10, sat_shift_limit=20, val_shift_limit=10, p=0.3), 
+            A.Affine(rotate=(-10, 10), translate_percent=(-0.1, 0.1), scale=(0.8, 1.5), p=0.3),
+            A.RandomBrightnessContrast(brightness_limit=(-0.1, 0.1), contrast_limit=0.1, p=0.3),
+            A.HueSaturationValue(hue_shift_limit=10, sat_shift_limit=20, val_shift_limit=10, p=0.3),
         ]
     else:
         transform_list = []
@@ -93,20 +183,40 @@ def get_transform(opt, params=None, img_size=[512, 512], grayscale=False, method
     if 'aug' in opt.preprocess:
         # DIY augmentation process
         # transform_list = []
-        print('Using custom augmentations...')
-        transform_list.append(aug.augmentations.crops.transforms.RandomResizedCrop(height=opt.crop_size, width=opt.crop_size, 
-                                            scale=(0.2, 1.0), 
-                                            interpolation=1, 
+        if opt.strong_aug:
+            transform_list.append(A.augmentations.crops.transforms.RandomResizedCrop(height=opt.crop_size, width=opt.crop_size,
+                                            scale=(0.2, 1.0),
+                                            interpolation=1,
                                             always_apply=False,
                                             p=1))
-        transform_list.append(aug.HorizontalFlip(p=0.5))
-        transform_list.append(aug.transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)))
-        transform_list.append(aug_pytorch_transforms.ToTensorV2())
+            transform_list.append(A.HorizontalFlip(p=0.5))
+            transform_list.append(A.transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)))
+            transform_list.append(APT.ToTensorV2())
 
-        transform_A = aug.Compose(transform_list, bbox_params=aug.BboxParams(format='yolo', label_fields=['class_labels'], min_visibility=0.2))
-        transform_B = aug.Compose(transform_list)
+            transform_A = A.Compose(transform_list, bbox_params=A.BboxParams(format='yolo', label_fields=['class_labels'], min_visibility=0.2))
+            transform_B = A.Compose(transform_list)
 
-        return transform_A, transform_B
+            return transform_A, transform_B
+
+        elif opt.masked_aug:
+            transform_A = CropGANStrongAugmentation(opt)
+            transform_B = transform_A.make_transform_B()
+            return transform_A, transform_B
+
+        else:
+            transform_list.append(A.augmentations.crops.transforms.RandomResizedCrop(height=opt.crop_size, width=opt.crop_size,
+                                                scale=(0.2, 1.0),
+                                                interpolation=1,
+                                                always_apply=False,
+                                                p=1))
+            transform_list.append(A.HorizontalFlip(p=0.5))
+            transform_list.append(A.transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)))
+            transform_list.append(APT.ToTensorV2())
+
+            transform_A = A.Compose(transform_list, bbox_params=A.BboxParams(format='yolo', label_fields=['class_labels'], min_visibility=0.2))
+            transform_B = A.Compose(transform_list)
+
+            return transform_A, transform_B
 
     else:
         # transform_list = []

@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 import numpy as np
 
-from src.util.util_yolo import build_targets, to_cpu, non_max_suppression
+from util.util_yolo import build_targets, to_cpu, non_max_suppression
 
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches

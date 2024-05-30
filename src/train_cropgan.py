@@ -13,6 +13,9 @@ import time
 import datetime
 import wandb
 
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from options.image_gen_options import ImageGenOptions
 from options.train_options import TrainOptions
 from data import create_dataset

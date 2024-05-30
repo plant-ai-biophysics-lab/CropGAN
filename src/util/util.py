@@ -7,7 +7,7 @@ import os
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import cv2 as cv
-import src.util.util_yolo as util_yolo
+import util.util_yolo as util_yolo
 import time
 import tqdm
 
