@@ -1,4 +1,7 @@
 from __future__ import division
+import os
+import sys
+sys.path.append(os.path.dirname(sys.path[0]))
 import math
 import time
 import tqdm
@@ -8,7 +11,7 @@ import torch.nn.functional as F
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
-from util.dataset_yolo import ListDataset
+from src.util.dataset_yolo import ListDataset
 
 import torch
 from torch.utils.data import DataLoader
@@ -16,7 +19,6 @@ from torchvision import datasets
 from torchvision import transforms
 from torch.autograd import Variable
 import torch.optim as optim
-
 
 def resize(image, size):
     image = F.interpolate(image.unsqueeze(0), size=size, mode="nearest").squeeze(0)
@@ -262,11 +264,13 @@ def non_max_suppression(prediction, conf_thres=0.5, nms_thres=0.4):
         while detections.size(0):
             large_overlap = bbox_iou(detections[0, :4].unsqueeze(0), detections[:, :4]) > nms_thres
             label_match = detections[0, -1] == detections[:, -1]
+
             # Indices of boxes with lower confidence scores, large IOUs and matching labels
             invalid = large_overlap & label_match
             weights = detections[invalid, 4:5]
+            
             # Merge overlapping bboxes by order of confidence
-            detections[0, :4] = (weights * detections[invalid, :4]).sum(0) / weights.sum()
+            detections[0, :4] = (weights * detections[invalid, :4]).sum(0) / (weights.sum() + 1e-6)
             keep_boxes += [detections[0]]
             detections = detections[~invalid]
         if keep_boxes:

@@ -11,6 +11,8 @@ import util.util_yolo as util_yolo
 import time
 import tqdm
 
+import wandb
+
 def tensor2im(input_image, imtype=np.uint8):
     """"Converts a Tensor array into a numpy image array.
 
@@ -189,7 +191,7 @@ def plot_image_with_detections(img_tensor,
         fig, (ax) = plt.subplots(1, 1, figsize=figsize)
     if normalize:
         ax.imshow(img_tensor.detach().cpu().squeeze(
-            0).permute([1, 2, 0])*0.5+0.5)
+            0).permute([1, 2, 0]) * 0.5 + 0.5)
     else:
         ax.imshow(img_tensor.detach().cpu().squeeze(0).permute([1, 2, 0]))
 
@@ -201,7 +203,7 @@ def plot_image_with_detections(img_tensor,
             for detect in detections_bbox:
                 if detect is not None:
                     detect = detect.squeeze(0)
-                    x1, y1, x2, y2, conf, cls_conf, cls_pred = detect
+                    x1, y1, x2, y2, conf, cls_conf, cls_pred = list(detect.cpu().detach().numpy())
                     box_w = x2 - x1
                     box_h = y2 - y1
                     color = (1., 0., 0.)
@@ -366,8 +368,14 @@ def plot_analysis_double_task(model, data, figsize=[12, 12],
             model.real_A*0.5+0.5, model.A_label)
         detections_nms = util_yolo.non_max_suppression(
             bbox_outputs, conf_thres=conf_thres, nms_thres=nms_thres)
+        if hasattr(model.real_A, 'cpu'):
+            model_real_A = model.real_A.cpu()
+        if hasattr(model.A_label, 'cpu'):
+            model_A_label = model.A_label.cpu()
+        if hasattr(detections_nms, 'cpu'):
+            detections_nms = detections_nms.cpu()
         plot_image_with_detections(
-            model.real_A, detections_nms,  model.A_label,  ax=ax_grids[0][0])
+            model_real_A, detections_nms,  model_A_label,  ax=ax_grids[0][0])
 
         # Fake B
         # de-normalize the image before feed into the yolo net
@@ -423,241 +431,250 @@ def plot_analysis_double_task(model, data, figsize=[12, 12],
 
 
     if save_name is not None:
+        fig = plt.gcf()
         plt.savefig(save_name)
         plt.close(fig)
+
+    # log image in wandb
+    image = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
+    image = image.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+    wandb.log({
+        "visual_analysis": wandb.Image(image)
+    })
+
 
 
 # ------------------------------
 # Evaluation
 # ------------------------------
 
-def further_train_yolo_a(model, dataset, yolo_epochs, yolo_gradient_accumulations=1, curoff_batch=np.inf,
-                         rec_A=False,
-                         fake_labeled_A=False,
-                         real_A=False,
-                         fake_B=False,
-                         iou_thres=0.5,
-                         conf_thres=0.1,
-                         nms_thres = 0.1,
-                         evaluate_through_fake_A=None,
-                         evaluate_through_real_B=None,
-                         dataset_yolo_eval=None):
-    yolo_epochs = 1
-    batches_done = 0
-    yolo_gradient_accumulations = 1
-    model.optimizer_yolo.zero_grad()
-    evaluate_through_fake_A_results = []
-    evaluate_through_real_B_results = []
+# def further_train_yolo_a(model, dataset, yolo_epochs, yolo_gradient_accumulations=1, curoff_batch=np.inf,
+#                          rec_A=False,
+#                          fake_labeled_A=False,
+#                          real_A=False,
+#                          fake_B=False,
+#                          iou_thres=0.5,
+#                          conf_thres=0.1,
+#                          nms_thres = 0.1,
+#                          evaluate_through_fake_A=None,
+#                          evaluate_through_real_B=None,
+#                          dataset_yolo_eval=None):
+#     yolo_epochs = 1
+#     batches_done = 0
+#     yolo_gradient_accumulations = 1
+#     model.optimizer_yolo.zero_grad()
+#     evaluate_through_fake_A_results = []
+#     evaluate_through_real_B_results = []
 
-    for epoch_yolo in range(yolo_epochs):
-        model.netYolo.train()
-        start_time = time.time()
-        for i, data in enumerate(dataset):
-            print("Batch: ", i)
-            if evaluate_through_fake_A is not None:
-                if batches_done % evaluate_through_fake_A == 0:
-                    precision, recall, AP, f1 = \
-                    util_yolo.evaluate_yolo_through_fakeA(model, dataset_yolo_eval, iou_thres, conf_thres, nms_thres)
-                    print("evaluate_through_fake_A: precision %.2f, recall %.2f, AP %.2f, f1 %.2f"%(precision, recall, AP, f1))
-                    evaluate_through_fake_A_results.append([batches_done, precision[0], recall[0], AP[0], f1[0]])
+#     for epoch_yolo in range(yolo_epochs):
+#         model.netYolo.train()
+#         start_time = time.time()
+#         for i, data in enumerate(dataset):
+#             print("Batch: ", i)
+#             if evaluate_through_fake_A is not None:
+#                 if batches_done % evaluate_through_fake_A == 0:
+#                     precision, recall, AP, f1 = \
+#                     util_yolo.evaluate_yolo_through_fakeA(model, dataset_yolo_eval, iou_thres, conf_thres, nms_thres)
+#                     print("evaluate_through_fake_A: precision %.2f, recall %.2f, AP %.2f, f1 %.2f"%(precision, recall, AP, f1))
+#                     evaluate_through_fake_A_results.append([batches_done, precision[0], recall[0], AP[0], f1[0]])
 
-            if evaluate_through_real_B is not None:
-                if batches_done % evaluate_through_real_B == 0:
-                    precision, recall, AP, f1 = \
-                    util_yolo.evaluate_yolo_through_realB(model, dataset_yolo_eval, iou_thres, conf_thres, nms_thres)
-                    print("evaluate_through_real_B: precision %.2f, recall %.2f, AP %.2f, f1 %.2f"%(precision, recall, AP, f1))
-                    evaluate_through_real_B_results.append([batches_done, precision[0], recall[0], AP[0], f1[0]])
+#             if evaluate_through_real_B is not None:
+#                 if batches_done % evaluate_through_real_B == 0:
+#                     precision, recall, AP, f1 = \
+#                     util_yolo.evaluate_yolo_through_realB(model, dataset_yolo_eval, iou_thres, conf_thres, nms_thres)
+#                     print("evaluate_through_real_B: precision %.2f, recall %.2f, AP %.2f, f1 %.2f"%(precision, recall, AP, f1))
+#                     evaluate_through_real_B_results.append([batches_done, precision[0], recall[0], AP[0], f1[0]])
 
-            model.netYolo.train()
-            model.optimizer_yolo.zero_grad()
-            model.set_input(data)  # unpack data from data loader
-            model.forward()           # run inference
-            imgs = model.rec_A
+#             model.netYolo.train()
+#             model.optimizer_yolo.zero_grad()
+#             model.set_input(data)  # unpack data from data loader
+#             model.forward()           # run inference
+#             imgs = model.rec_A
 
-            # Train on rec A
-            if rec_A:        
-                imgs = model.rec_A.detach()*0.5+0.5
-                targets =  model.A_label
-                loss, outputs = model.netYolo(imgs, targets)
-                if loss > 0:
-                    loss.backward()
-                    model.netYolo.seen += imgs.size(0)
-                    if batches_done % yolo_gradient_accumulations == 0:
-                        # Accumulates gradient before each step
-                        model.optimizer_yolo.step()
-                        model.optimizer_yolo.zero_grad()
-                print("rec_A loss: ", loss.item())
+#             # Train on rec A
+#             if rec_A:        
+#                 imgs = model.rec_A.detach()*0.5+0.5
+#                 targets =  model.A_label
+#                 loss, outputs = model.netYolo(imgs, targets)
+#                 if loss > 0:
+#                     loss.backward()
+#                     model.netYolo.seen += imgs.size(0)
+#                     if batches_done % yolo_gradient_accumulations == 0:
+#                         # Accumulates gradient before each step
+#                         model.optimizer_yolo.step()
+#                         model.optimizer_yolo.zero_grad()
+#                 print("rec_A loss: ", loss.item())
             
-            # Train on fake labeled A  
-            if fake_labeled_A:      
-                imgs = model.fake_labeled_A.detach()*0.5+0.5
-                targets =  model.labeled_B_label
-                loss, outputs = model.netYolo(imgs, targets)
-                if loss > 0:
-                    loss.backward()
-                    model.netYolo.seen += imgs.size(0)
-                    if batches_done % yolo_gradient_accumulations == 0:
-                        # Accumulates gradient before each step
-                        model.optimizer_yolo.step()
-                        model.optimizer_yolo.zero_grad()
-                print("fake_labeled_A loss: ", loss.item())
+#             # Train on fake labeled A  
+#             if fake_labeled_A:      
+#                 imgs = model.fake_labeled_A.detach()*0.5+0.5
+#                 targets =  model.labeled_B_label
+#                 loss, outputs = model.netYolo(imgs, targets)
+#                 if loss > 0:
+#                     loss.backward()
+#                     model.netYolo.seen += imgs.size(0)
+#                     if batches_done % yolo_gradient_accumulations == 0:
+#                         # Accumulates gradient before each step
+#                         model.optimizer_yolo.step()
+#                         model.optimizer_yolo.zero_grad()
+#                 print("fake_labeled_A loss: ", loss.item())
 
-            # Train on real A
-            if real_A:        
-                imgs = model.real_A*0.5+0.5
-                targets =  model.A_label
-                loss, outputs = model.netYolo(imgs, targets)
-                if loss > 0:
-                    loss.backward()
-                    model.netYolo.seen += imgs.size(0)
-                    if batches_done % yolo_gradient_accumulations == 0:
-                        # Accumulates gradient before each step
-                        model.optimizer_yolo.step()
-                        model.optimizer_yolo.zero_grad()
-                print("real_A loss: ", loss.item())
+#             # Train on real A
+#             if real_A:        
+#                 imgs = model.real_A*0.5+0.5
+#                 targets =  model.A_label
+#                 loss, outputs = model.netYolo(imgs, targets)
+#                 if loss > 0:
+#                     loss.backward()
+#                     model.netYolo.seen += imgs.size(0)
+#                     if batches_done % yolo_gradient_accumulations == 0:
+#                         # Accumulates gradient before each step
+#                         model.optimizer_yolo.step()
+#                         model.optimizer_yolo.zero_grad()
+#                 print("real_A loss: ", loss.item())
             
-            if fake_B:
-                imgs = model.fake_B.detach()*0.5+0.5
-                targets =  model.A_label
-                loss, outputs = model.netYolo(imgs, targets)
-                if loss > 0:
-                    loss.backward()
-                    model.netYolo.seen += imgs.size(0)
-                    if batches_done % yolo_gradient_accumulations == 0:
-                        # Accumulates gradient before each step
-                        model.optimizer_yolo.step()
-                        model.optimizer_yolo.zero_grad()
-                print("fake_B loss: ", loss.item())
+#             if fake_B:
+#                 imgs = model.fake_B.detach()*0.5+0.5
+#                 targets =  model.A_label
+#                 loss, outputs = model.netYolo(imgs, targets)
+#                 if loss > 0:
+#                     loss.backward()
+#                     model.netYolo.seen += imgs.size(0)
+#                     if batches_done % yolo_gradient_accumulations == 0:
+#                         # Accumulates gradient before each step
+#                         model.optimizer_yolo.step()
+#                         model.optimizer_yolo.zero_grad()
+#                 print("fake_B loss: ", loss.item())
             
-            batches_done += imgs.size(0)
+#             batches_done += imgs.size(0)
 
 
-            if batches_done > curoff_batch:
-                break
+#             if batches_done > curoff_batch:
+#                 break
     
-    return evaluate_through_fake_A_results, evaluate_through_real_B_results
+#     return evaluate_through_fake_A_results, evaluate_through_real_B_results
             
-def further_train_yolo_a_eval_double(model, dataset, yolo_epochs, yolo_gradient_accumulations=1, curoff_batch=np.inf,
-                         rec_A=False,
-                         fake_labeled_A=False,
-                         real_A=False,
-                         fake_B=False,
-                         labeled_B=False,
-                         iou_thres=0.5,
-                         conf_thres=0.1,
-                         nms_thres = 0.1,
-                         labeled_B_train_ratio=1,
-                         evaluate_through_real_B=None,
-                         dataset_yolo_eval=None,
-                         validation_path=None):
-    batches_done = 0
-    yolo_gradient_accumulations = 1
-    model.optimizer_yolo_b.zero_grad()
-    evaluate_through_fake_A_results = []
-    evaluate_through_real_B_results = []
+# def further_train_yolo_a_eval_double(model, dataset, yolo_epochs, yolo_gradient_accumulations=1, curoff_batch=np.inf,
+#                          rec_A=False,
+#                          fake_labeled_A=False,
+#                          real_A=False,
+#                          fake_B=False,
+#                          labeled_B=False,
+#                          iou_thres=0.5,
+#                          conf_thres=0.1,
+#                          nms_thres = 0.1,
+#                          labeled_B_train_ratio=1,
+#                          evaluate_through_real_B=None,
+#                          dataset_yolo_eval=None,
+#                          validation_path=None):
+#     batches_done = 0
+#     yolo_gradient_accumulations = 1
+#     model.optimizer_yolo_b.zero_grad()
+#     evaluate_through_fake_A_results = []
+#     evaluate_through_real_B_results = []
 
-    for epoch_yolo in range(yolo_epochs):
-        model.netYoloB.train()
-        start_time = time.time()
-        for i, data in enumerate(dataset):
-            print("Batch: ", batches_done)
-            if evaluate_through_real_B is not None and dataset_yolo_eval is not None:
-                if batches_done % evaluate_through_real_B == 0:
-                    precision, recall, AP, f1 = \
-                    util_yolo.evaluate_yolo_through_realB_double(model, dataset_yolo_eval, iou_thres, conf_thres, nms_thres)
-                    print("evaluate_through_real_B: precision %.2f, recall %.2f, AP %.2f, f1 %.2f"%(precision, recall, AP, f1))
-                    evaluate_through_real_B_results.append([batches_done, precision[0], recall[0], AP[0], f1[0]])
+#     for epoch_yolo in range(yolo_epochs):
+#         model.netYoloB.train()
+#         start_time = time.time()
+#         for i, data in enumerate(dataset):
+#             print("Batch: ", batches_done)
+#             if evaluate_through_real_B is not None and dataset_yolo_eval is not None:
+#                 if batches_done % evaluate_through_real_B == 0:
+#                     precision, recall, AP, f1 = \
+#                     util_yolo.evaluate_yolo_through_realB_double(model, dataset_yolo_eval, iou_thres, conf_thres, nms_thres)
+#                     print("evaluate_through_real_B: precision %.2f, recall %.2f, AP %.2f, f1 %.2f"%(precision, recall, AP, f1))
+#                     evaluate_through_real_B_results.append([batches_done, precision[0], recall[0], AP[0], f1[0]])
 
-            if evaluate_through_real_B is not None and validation_path is not None:
-                if batches_done % evaluate_through_real_B == 0:
-                    precision, recall, AP, f1, _, _ = util_yolo.evaluate_yolo_net(model.netYoloB, 
-                                                                                validation_path, 
-                                                                                iou_thres,
-                                                                                conf_thres, 
-                                                                                nms_thres, img_size=416, class_names='grapes')
+#             if evaluate_through_real_B is not None and validation_path is not None:
+#                 if batches_done % evaluate_through_real_B == 0:
+#                     precision, recall, AP, f1, _, _ = util_yolo.evaluate_yolo_net(model.netYoloB, 
+#                                                                                 validation_path, 
+#                                                                                 iou_thres,
+#                                                                                 conf_thres, 
+#                                                                                 nms_thres, img_size=416, class_names='grapes')
 
-                    print("evaluate_through_real_B (validation_path): precision %.2f, recall %.2f, AP %.2f, f1 %.2f"%(precision, recall, AP, f1))
-                    evaluate_through_real_B_results.append([batches_done, precision[0], recall[0], AP[0], f1[0]])
+#                     print("evaluate_through_real_B (validation_path): precision %.2f, recall %.2f, AP %.2f, f1 %.2f"%(precision, recall, AP, f1))
+#                     evaluate_through_real_B_results.append([batches_done, precision[0], recall[0], AP[0], f1[0]])
 
-            model.netYoloB.train()
-            model.optimizer_yolo_b.zero_grad()
-            model.set_input(data)  # unpack data from data loader
-            model.forward()           # run inference
-            imgs = model.rec_A
+#             model.netYoloB.train()
+#             model.optimizer_yolo_b.zero_grad()
+#             model.set_input(data)  # unpack data from data loader
+#             model.forward()           # run inference
+#             imgs = model.rec_A
 
-            # Train on rec A
-            if rec_A:        
-                imgs = model.rec_A.detach()*0.5+0.5
-                targets =  model.A_label
-                loss, outputs = model.netYoloB(imgs, targets)
-                if loss > 0:
-                    loss.backward()
-                    model.netYoloB.seen += imgs.size(0)
-                    if batches_done % yolo_gradient_accumulations == 0:
-                        # Accumulates gradient before each step
-                        model.optimizer_yolo.step()
-                        model.optimizer_yolo.zero_grad()
-                    print("rec_A loss: ", loss.item())
+#             # Train on rec A
+#             if rec_A:        
+#                 imgs = model.rec_A.detach()*0.5+0.5
+#                 targets =  model.A_label
+#                 loss, outputs = model.netYoloB(imgs, targets)
+#                 if loss > 0:
+#                     loss.backward()
+#                     model.netYoloB.seen += imgs.size(0)
+#                     if batches_done % yolo_gradient_accumulations == 0:
+#                         # Accumulates gradient before each step
+#                         model.optimizer_yolo.step()
+#                         model.optimizer_yolo.zero_grad()
+#                     print("rec_A loss: ", loss.item())
             
-            # Train on fake labeled A  
-            if fake_labeled_A:      
-                imgs = model.fake_labeled_A.detach()*0.5+0.5
-                targets =  model.labeled_B_label
-                loss, outputs = model.netYoloB(imgs, targets)
-                if loss > 0:
-                    loss.backward()
-                    model.netYoloB.seen += imgs.size(0)
-                    if batches_done % yolo_gradient_accumulations == 0:
-                        # Accumulates gradient before each step
-                        model.optimizer_yolo.step()
-                        model.optimizer_yolo.zero_grad()
-                    print("fake_labeled_A loss: ", loss.item())
+#             # Train on fake labeled A  
+#             if fake_labeled_A:      
+#                 imgs = model.fake_labeled_A.detach()*0.5+0.5
+#                 targets =  model.labeled_B_label
+#                 loss, outputs = model.netYoloB(imgs, targets)
+#                 if loss > 0:
+#                     loss.backward()
+#                     model.netYoloB.seen += imgs.size(0)
+#                     if batches_done % yolo_gradient_accumulations == 0:
+#                         # Accumulates gradient before each step
+#                         model.optimizer_yolo.step()
+#                         model.optimizer_yolo.zero_grad()
+#                     print("fake_labeled_A loss: ", loss.item())
 
-            # Train on real A
-            if real_A:        
-                imgs = model.real_A*0.5+0.5
-                targets =  model.A_label
-                loss, outputs = model.netYoloB(imgs, targets)
-                if loss > 0:
-                    loss.backward()
-                    model.netYoloB.seen += imgs.size(0)
-                    if batches_done % yolo_gradient_accumulations == 0:
-                        # Accumulates gradient before each step
-                        model.optimizer_yolo.step()
-                        model.optimizer_yolo.zero_grad()
-                    print("real_A loss: ", loss.item())
+#             # Train on real A
+#             if real_A:        
+#                 imgs = model.real_A*0.5+0.5
+#                 targets =  model.A_label
+#                 loss, outputs = model.netYoloB(imgs, targets)
+#                 if loss > 0:
+#                     loss.backward()
+#                     model.netYoloB.seen += imgs.size(0)
+#                     if batches_done % yolo_gradient_accumulations == 0:
+#                         # Accumulates gradient before each step
+#                         model.optimizer_yolo.step()
+#                         model.optimizer_yolo.zero_grad()
+#                     print("real_A loss: ", loss.item())
             
-            if fake_B:
-                imgs = model.fake_B.detach()*0.5+0.5
-                targets =  model.A_label
-                loss, outputs = model.netYoloB(imgs, targets)
-                if loss > 0:
-                    loss.backward()
-                    model.netYoloB.seen += imgs.size(0)
-                    if batches_done % yolo_gradient_accumulations == 0:
-                        # Accumulates gradient before each step
-                        model.optimizer_yolo_b.step()
-                        model.optimizer_yolo_b.zero_grad()
-                    print("fake_B loss: ", loss.item())
+#             if fake_B:
+#                 imgs = model.fake_B.detach()*0.5+0.5
+#                 targets =  model.A_label
+#                 loss, outputs = model.netYoloB(imgs, targets)
+#                 if loss > 0:
+#                     loss.backward()
+#                     model.netYoloB.seen += imgs.size(0)
+#                     if batches_done % yolo_gradient_accumulations == 0:
+#                         # Accumulates gradient before each step
+#                         model.optimizer_yolo_b.step()
+#                         model.optimizer_yolo_b.zero_grad()
+#                     print("fake_B loss: ", loss.item())
 
-            if labeled_B and batches_done % labeled_B_train_ratio == 0:
-                imgs = model.labeled_B*0.5+0.5
-                targets =  model.labeled_B_label
-                loss, outputs = model.netYoloB(imgs, targets)
-                if loss > 0:
-                    loss.backward()
-                    model.netYoloB.seen += imgs.size(0)
-                    if batches_done % yolo_gradient_accumulations == 0:
-                        # Accumulates gradient before each step
-                        model.optimizer_yolo_b.step()
-                        model.optimizer_yolo_b.zero_grad()
-                    print("labeled_B loss: ", loss.item())
+#             if labeled_B and batches_done % labeled_B_train_ratio == 0:
+#                 imgs = model.labeled_B*0.5+0.5
+#                 targets =  model.labeled_B_label
+#                 loss, outputs = model.netYoloB(imgs, targets)
+#                 if loss > 0:
+#                     loss.backward()
+#                     model.netYoloB.seen += imgs.size(0)
+#                     if batches_done % yolo_gradient_accumulations == 0:
+#                         # Accumulates gradient before each step
+#                         model.optimizer_yolo_b.step()
+#                         model.optimizer_yolo_b.zero_grad()
+#                     print("labeled_B loss: ", loss.item())
 
-            batches_done += imgs.size(0)
+#             batches_done += imgs.size(0)
 
 
-            if batches_done > curoff_batch:
-                break
+#             if batches_done > curoff_batch:
+#                 break
     
-    return evaluate_through_fake_A_results, evaluate_through_real_B_results
+#     return evaluate_through_fake_A_results, evaluate_through_real_B_results
             

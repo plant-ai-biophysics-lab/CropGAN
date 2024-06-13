@@ -127,3 +127,7 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# for yolo-uda branch
+yolo_uda/wandb
+yolo_uda/*.pth
