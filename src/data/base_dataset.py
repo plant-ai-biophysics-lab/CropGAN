@@ -2,6 +2,8 @@
 
 It also includes common transformation functions (e.g., get_transform, __scale_width), which can be later used in subclasses.
 """
+import wandb
+
 import random
 import numpy as np
 import torch.utils.data as data
@@ -82,37 +84,26 @@ def get_params(opt, size):
 
 class CropGANStrongAugmentation(object):
     def __init__(self, opt):
+        bbox_params = A.BboxParams(format='yolo', label_fields=['class_labels'], min_visibility=0.2)
+
         self.transform_list = [
-            A.Affine(rotate=(-10, 10), translate_percent=(-0.1, 0.1), scale=(0.8, 1.5), p=0.3),
-            A.RandomBrightnessContrast(brightness_limit=(-0.1, 0.1), contrast_limit=0.1, p=0.3),
+            A.RandomBrightnessContrast(brightness_limit=(-0.1, 0.2), contrast_limit=0.2, p=0.3),
             A.HueSaturationValue(hue_shift_limit=10, sat_shift_limit=20, val_shift_limit=10, p=0.3),
+        ]
+
+        self.composed_transform = A.Compose(
+            self.transform_list,
+            bbox_params=bbox_params
+        )
+
+        self.post_transform_list = [
             A.augmentations.crops.transforms.RandomResizedCrop(
                 height=opt.crop_size, width=opt.crop_size,
                 scale=(0.2, 1.0),
                 interpolation=1,
                 always_apply=False,
-                p=1)
-        ]
-
-        self.composed_transform = A.ReplayCompose(
-            self.transform_list,
-            bbox_params=bbox_params
-        )
-
-        self.resized_transform = [A.augmentations.crops.transforms.RandomResizedCrop(
-            height=opt.crop_size, width=opt.crop_size,
-            scale=(0.2, 1.0),
-            interpolation=1,
-            always_apply=False,
-            p=1
-        )]
-
-        self.only_resized_crop = A.ReplayCompose(
-            self.resized_transform,
-            bbox_params=bbox_params
-        )
-
-        self.post_transform_list = [
+                p=1),
+            A.Affine(rotate=(-10, 10), translate_percent=(-0.1, 0.1), scale=(0.8, 1.5), p=0.3),
             A.HorizontalFlip(p=0.5),
             A.transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
             APT.ToTensorV2()
@@ -124,36 +115,31 @@ class CropGANStrongAugmentation(object):
         )
 
     def __call__(self, image, bboxes, class_labels):
+        # filter out only the resized crop from the transforms
         original_image = image.copy()
         transformed = self.composed_transform(image=image, bboxes=bboxes, class_labels=class_labels)
-
-        # filter out only the resized crop from the transforms
-        replay_params = transformed['replay']
-        replay_params['transforms'] = [replay_params['transforms'][-1]]
-        replay_params['bbox_params'] = None
-        original_image = A.ReplayCompose.replay(replay_params, image=original_image)['image']
+        image, bboxes, class_labels = transformed['image'], transformed['bboxes'], transformed['class_labels']
+        image = np.ascontiguousarray(image.copy())
 
         # Check the highest possible y-value and lowest possible y-value for the bounding
         # boxes corresponding to that image
         max_y = 0
         min_y = 1
         for bbox in transformed['bboxes']:
-            max_y = max(max_y, bbox[1])
+            max_y = max(max_y, bbox[3])
             min_y = min(min_y, bbox[1])
         max_y = int(max_y * transformed['image'].shape[0])
         min_y = int(min_y * transformed['image'].shape[0])
 
         # replace the regions outside of the bounding boxes with the original image
-        transformed['image'][
-            :min_y, :, :
-        ] = original_image[:min_y, :, :]
-        transformed['image'][
-            max_y:, :, :
-        ] = original_image[max_y:, :, :]
+        transform_region = 'exterior'
+        if transform_region == 'exterior':
+            image[:min_y, :, :] = original_image[:min_y, :, :]
+            image[max_y:, :, :] = original_image[max_y:, :, :]
+        elif transform_region == 'interior':
+            image[min_y:max_y, :, :] = original_image[min_y:max_y, :, :]
 
-        transformed = self.post_transform(image=transformed['image'],
-                                          bboxes=transformed['bboxes'],
-                                          class_labels=transformed['class_labels'])
+        transformed = self.post_transform(image=image, bboxes=bboxes, class_labels=class_labels)
 
         return transformed
 
@@ -162,61 +148,46 @@ class CropGANStrongAugmentation(object):
             def __init__(self, transform_list):
                 self.full_transform = A.Compose(transform_list)
 
-            def __call__(self, *args, **kwargs):
-                return self.full_transform(*args, **kwargs)
+            def __call__(self, image):
+                return self.full_transform(image=image, replay={})
 
-        transforms_B = self.transform_list + self.resized_transform + self.post_transform_list
+        transforms_B = self.transform_list + self.post_transform_list
         return TransformB(transform_list=transforms_B)
 
 
 def get_transform(opt, params=None, img_size=[512, 512], grayscale=False, method=Image.BICUBIC, convert=True):
-
-    if opt.strong_aug:
-        transform_list = [
-            A.Affine(rotate=(-10, 10), translate_percent=(-0.1, 0.1), scale=(0.8, 1.5), p=0.3),
-            A.RandomBrightnessContrast(brightness_limit=(-0.1, 0.1), contrast_limit=0.1, p=0.3),
-            A.HueSaturationValue(hue_shift_limit=10, sat_shift_limit=20, val_shift_limit=10, p=0.3),
-        ]
-    else:
-        transform_list = []
-
     if 'aug' in opt.preprocess:
-        # DIY augmentation process
-        # transform_list = []
-        if opt.strong_aug:
-            transform_list.append(A.augmentations.crops.transforms.RandomResizedCrop(height=opt.crop_size, width=opt.crop_size,
-                                            scale=(0.2, 1.0),
-                                            interpolation=1,
-                                            always_apply=False,
-                                            p=1))
-            transform_list.append(A.HorizontalFlip(p=0.5))
-            transform_list.append(A.transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)))
-            transform_list.append(APT.ToTensorV2())
-
-            transform_A = A.Compose(transform_list, bbox_params=A.BboxParams(format='yolo', label_fields=['class_labels'], min_visibility=0.2))
-            transform_B = A.Compose(transform_list)
-
-            return transform_A, transform_B
-
-        elif opt.masked_aug:
+        if opt.masked_aug:
             transform_A = CropGANStrongAugmentation(opt)
             transform_B = transform_A.make_transform_B()
             return transform_A, transform_B
 
+
+        if opt.strong_aug:
+            transform_list = [
+                A.Affine(rotate=(-10, 10), translate_percent=(-0.1, 0.1), scale=(0.8, 1.5), p=0.3),
+                A.RandomBrightnessContrast(brightness_limit=(-0.1, 0.1), contrast_limit=0.1, p=0.3),
+                A.HueSaturationValue(hue_shift_limit=10, sat_shift_limit=20, val_shift_limit=10, p=0.3),
+            ]
         else:
-            transform_list.append(A.augmentations.crops.transforms.RandomResizedCrop(height=opt.crop_size, width=opt.crop_size,
-                                                scale=(0.2, 1.0),
-                                                interpolation=1,
-                                                always_apply=False,
-                                                p=1))
-            transform_list.append(A.HorizontalFlip(p=0.5))
-            transform_list.append(A.transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)))
-            transform_list.append(APT.ToTensorV2())
+            transform_list = []
 
-            transform_A = A.Compose(transform_list, bbox_params=A.BboxParams(format='yolo', label_fields=['class_labels'], min_visibility=0.2))
-            transform_B = A.Compose(transform_list)
+        transform_list.append(
+            A.augmentations.crops.transforms.RandomResizedCrop(height=opt.crop_size, width=opt.crop_size,
+                                                               scale=(0.2, 1.0),
+                                                               interpolation=1,
+                                                               always_apply=False,
+                                                               p=1))
+        transform_list.append(A.HorizontalFlip(p=0.5))
+        transform_list.append(A.transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)))
+        transform_list.append(APT.ToTensorV2())
 
-            return transform_A, transform_B
+        transform_A = A.Compose(transform_list, bbox_params=A.BboxParams(format='yolo', label_fields=['class_labels'],
+                                                                         min_visibility=0.2))
+        transform_B = A.Compose(transform_list)
+
+        return transform_A, transform_B
+
 
     else:
         # transform_list = []
