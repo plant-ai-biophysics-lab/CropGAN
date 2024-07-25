@@ -103,7 +103,7 @@ class CropGANStrongAugmentation(object):
                 interpolation=1,
                 always_apply=False,
                 p=1),
-            A.Affine(rotate=(-10, 10), translate_percent=(-0.1, 0.1), scale=(0.8, 1.5), p=0.3),
+            A.Affine(rotate=(-360, 360), translate_percent=(-0.3, 0.3), scale=(0.8, 1.5), p=0.3),
             A.HorizontalFlip(p=0.5),
             A.transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
             APT.ToTensorV2()
@@ -165,9 +165,9 @@ def get_transform(opt, params=None, img_size=[512, 512], grayscale=False, method
 
         if opt.strong_aug:
             transform_list = [
-                A.Affine(rotate=(-10, 10), translate_percent=(-0.1, 0.1), scale=(0.8, 1.5), p=0.3),
+                A.Affine(rotate=(-360, 360), translate_percent=(-0.3, 0.3), scale=(0.8, 1.5), p=0.3),
                 A.RandomBrightnessContrast(brightness_limit=(-0.1, 0.1), contrast_limit=0.1, p=0.3),
-                A.HueSaturationValue(hue_shift_limit=10, sat_shift_limit=20, val_shift_limit=10, p=0.3),
+                A.HueSaturationValue(hue_shift_limit=10, sat_shift_limit=20, val_shift_limit=10, p=0.5),
             ]
         else:
             transform_list = []

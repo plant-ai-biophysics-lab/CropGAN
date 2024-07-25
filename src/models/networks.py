@@ -3,6 +3,7 @@ import torch.nn as nn
 from torch.nn import init
 import functools
 from torch.optim import lr_scheduler
+import pytorch_msssim
 
 
 ###############################################################################
@@ -216,7 +217,7 @@ class GANLoss(nn.Module):
     that has the same size as the input.
     """
 
-    def __init__(self, gan_mode, target_real_label=1.0, target_fake_label=0.0, label_smoothing=0.0):
+    def __init__(self, gan_mode, ssim_loss=False, target_real_label=1.0, target_fake_label=0.0, label_smoothing=0.0):
         """ Initialize the GANLoss class.
 
         Parameters:
@@ -240,6 +241,13 @@ class GANLoss(nn.Module):
             self.loss = None
         else:
             raise NotImplementedError('gan mode %s not implemented' % gan_mode)
+
+        # check if SSIM loss is requested
+        self.ssim_loss = ssim_loss
+        if ssim_loss:
+            print("[INFO (LOSS)]: Using SSIM Loss")
+            self.loss = pytorch_msssim.SSIM(data_range=255, size_average=True, channel=1)
+
 
     def get_target_tensor(self, prediction, target_is_real):
         """Create label tensors with the same size as the input.
@@ -271,6 +279,8 @@ class GANLoss(nn.Module):
         if self.gan_mode in ['lsgan', 'vanilla']:
             target_tensor = self.get_target_tensor(prediction, target_is_real)
             loss = self.loss(prediction, target_tensor)
+            if self.ssim_loss:
+                loss = 1 - loss
         elif self.gan_mode == 'wgangp':
             if target_is_real:
                 loss = -prediction.mean()

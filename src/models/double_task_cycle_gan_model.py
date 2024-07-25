@@ -170,7 +170,8 @@ class DoubleTaskCycleGanModel(BaseModel):
             self.fake_labeled_A_pool = ImagePool(opt.pool_size)  # create image buffer to store previously generated images
 
             # define loss functions
-            self.criterionGAN = networks.GANLoss(opt.gan_mode).to(self.device)  # define GAN loss.
+            self.criterionGAN = networks.GANLoss(opt.gan_mode, ssim_loss=False).to(self.device)  # define GAN loss.
+            self.criterionGAN_ssim = networks.GANLoss(opt.gan_mode, ssim_loss=True).to(self.device)  # define GAN loss.
             self.criterionCycle = torch.nn.L1Loss()
             self.criterionIdt = torch.nn.L1Loss()
             # initialize optimizers; schedulers will be automatically created by function <BaseModel.setup>.
@@ -334,6 +335,10 @@ class DoubleTaskCycleGanModel(BaseModel):
         self.loss_G_A = self.criterionGAN(self.netD_A(self.fake_B), True)
         # GAN loss D_B(G_B(B))
         self.loss_G_B = self.criterionGAN(self.netD_B(self.fake_A), True)
+
+        # GAN loss (SSIM)
+        self.loss_G_A_ssim = self.criterionGAN_ssim(self.netD_A(self.fake_B), True)
+        self.loss_G_B_ssim = self.criterionGAN_ssim(self.netD_B(self.fake_A), True)
         
         # Forward cycle loss || G_B(G_A(A)) - A||
         self.loss_cycle_A = self.criterionCycle(self.rec_A, self.real_A) * lambda_A
@@ -366,15 +371,26 @@ class DoubleTaskCycleGanModel(BaseModel):
             }
             loss_yolo_a, self.bbox_outputs_a = self.netYoloA(batch) # de-normalize the image before feed into the yolo net
             self.loss_G_B2 = self.criterionGAN(self.netD_B(self.fake_labeled_A), True)
+            self.loss_G_B2_ssim = self.criterionGAN_ssim(self.netD_B(self.fake_labeled_A), True)
             self.loss_yolo_a = lambda_yolo_a * loss_yolo_a
         else:
             self.loss_yolo_a = 0
             self.loss_G_B2 = 0
+            self.loss_G_B2_ssim = 0
 
         # combined loss and calculate gradients
-        self.loss_G = self.loss_G_A + self.loss_G_B + self.loss_cycle_A + \
-                      self.loss_cycle_B + self.loss_idt_A + \
-                      self.loss_idt_B + self.loss_yolo_b + self.loss_yolo_a + self.loss_G_B2
+        loss_G = self.loss_G_A + self.loss_G_B + self.loss_G_B2
+        loss_G_ssim = self.loss_G_A + self.loss_G_B + self.loss_G_B2_ssim
+        loss_cycle = self.loss_cycle_A + self.loss_cycle_B
+        loss_idt = self.loss_idt_A + self.loss_idt_B
+        loss_yolo = self.loss_yolo_b + self.loss_yolo_a
+
+        self.loss_G = (1.0 * loss_G +
+                       0.0 * loss_G_ssim +
+                       1.0 * loss_cycle +
+                       1.0 * loss_idt +
+                       1.0 * loss_yolo)
+
         self.loss_G.backward()
 
     def compute_visuals(self):

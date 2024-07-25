@@ -459,6 +459,8 @@ def plot_analysis_double_task(model, data, figsize=[12, 12],
             plot_image_with_detections(model.labeled_B, ax=ax_grids[0][2])
             plot_image_with_detections(model.fake_labeled_A, ax=ax_grids[1][2])
 
+    # shrink margins
+    plt.tight_layout()
 
     if save_name is not None:
         fig = plt.gcf()
