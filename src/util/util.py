@@ -7,7 +7,7 @@ import os
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import cv2 as cv
-from .util_yolo import non_max_suppression
+from src.util.util_yolo import non_max_suppression
 import time
 import tqdm
 

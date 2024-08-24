@@ -8,7 +8,7 @@ import torch.nn.functional as F
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
-from util.dataset_yolo import ListDataset
+from src.util.dataset_yolo import ListDataset
 
 import torch
 from torch.utils.data import DataLoader
