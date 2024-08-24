@@ -8,10 +8,14 @@ Step 1: Initialize a YOLO model from real A.
 """
 
 import os
+import sys
 import glob
 import time
 import datetime
 import wandb
+
+# Add root CropGAN directory to path
+sys.path.append(os.path.dirname(sys.path[0]))
 
 from options.image_gen_options import ImageGenOptions
 from options.train_options import TrainOptions
