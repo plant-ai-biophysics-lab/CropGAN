@@ -84,8 +84,8 @@ def get_transform(opt, params=None, img_size=[512, 512], grayscale=False, method
     if opt.strong_aug:
         transform_list = [
             # aug.Affine(rotate=(-10, 10), translate_percent=(-0.1, 0.1), scale=(0.8, 1.5), p=0.3),
-            A.RandomBrightnessContrast(brightness_limit=(-0.6, 0.4), contrast_limit=0.2, p=0.5),
-            A.HueSaturationValue(hue_shift_limit=20, sat_shift_limit=30, val_shift_limit=20, p=0.5),
+            aug.RandomBrightnessContrast(brightness_limit=(-0.6, 0.4), contrast_limit=0.2, p=0.5),
+            aug.HueSaturationValue(hue_shift_limit=20, sat_shift_limit=30, val_shift_limit=20, p=0.5),
         ]
     else:
         transform_list = []
